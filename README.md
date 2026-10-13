@@ -27,11 +27,11 @@ built on top of this one (see [kide on top](#kide-on-top)).
 
 Built on top of a base image (`BASE` in `podman/base.conf`, default Rocky
 Linux 9, RHEL9-compatible; UBI9 lacks packages the EPEL ones depend on: Qt5,
-gdal, protobuf for opencv, GL libraries for glew/glfw):
+gdal-libs, protobuf for opencv, GL libraries for glew/glfw):
 
 - the RHEL packages (from AppStream/CRB/EPEL): gcc/g++, make, cmake,
   clangd/clang-format/clang-tidy, gdb, lldb, git, perl + perl-Dumpvalue,
-  Python 3.12 with numpy and pybind11, opencv, glew, glfw, gdal + gdal-libs,
+  Python 3.12 with numpy and pybind11, opencv, glew, glfw, gdal-libs (for opencv),
   Qt5 (`qt5`), libtiff + libtiff-devel, and what the PROJ/GEOS/GDAL build
   needs (sqlite, and the -devel packages of sqlite, libcurl, expat, zlib; all
   BaseOS/AppStream, no CRB)

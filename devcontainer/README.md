@@ -10,7 +10,7 @@ What is in it, all from ibn-dev:
 
 - the RHEL9 packages: gcc/g++, make, cmake, clangd/clang-format/clang-tidy,
   gdb, lldb (`lldb-dap`), git, perl + perl-Dumpvalue, Python 3.12 with numpy
-  and pybind11, opencv, glew, glfw, gdal + gdal-libs, Qt5, libtiff, and what
+  and pybind11, opencv, glew, glfw, gdal-libs (for opencv), Qt5, libtiff, and what
   the PROJ/GEOS/GDAL build needs (BaseOS/AppStream only)
 - `build-dist.sh` with `dist/` (in `/opt/ibn-dev/dist`, on `PATH`): run once in
   the container, it builds CMake 4 (ahead of RHEL's on `PATH`), onnxruntime,
