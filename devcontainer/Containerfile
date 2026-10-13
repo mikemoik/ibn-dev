@@ -1,0 +1,24 @@
+# ibn-devcontainer: the ibn-dev build environment (podman/Containerfile.ibn-dev) as a
+# VS Code dev container, without the terminal IDE: VS Code is the editor, bash
+# the shell. ibn-dev already has everything (RHEL packages, pip/uv,
+# build-dist.sh with dist/, KIDE_USER with bash); this layer
+# only adds ~/.vscode-server, owned by KIDE_USER, so the volume
+# devcontainer.json mounts there starts out as its own (VS Code's server
+# survives a rebuilt container).
+# Build ibn-dev first, then this, from the repo root:
+#   podman build --build-arg-file podman/base.conf -t ibn-dev -f podman/Containerfile.ibn-dev .
+#   podman build --build-arg-file podman/base.conf -t ibn-devcontainer -f devcontainer/Containerfile .
+# Use it from a project's .devcontainer/devcontainer.json (template:
+# devcontainer/devcontainer.json). See devcontainer/README.md.
+
+# IBN_DEV: the ibn-dev image to build on
+ARG IBN_DEV=localhost/ibn-dev
+FROM $IBN_DEV
+USER root
+ARG KIDE_USER
+RUN set -e; \
+    home=$(getent passwd "$KIDE_USER" | cut -d: -f6); \
+    mkdir -p "$home/.vscode-server"; \
+    chown "$KIDE_USER:$(id -g "$KIDE_USER")" "$home/.vscode-server"
+USER $KIDE_USER
+WORKDIR /workspace

@@ -1,0 +1,7 @@
+module Devlibs {
+  @topic
+  struct Msg {
+    @key long id;
+    string text;
+  };
+};

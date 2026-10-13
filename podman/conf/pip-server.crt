@@ -1,0 +1,26 @@
+# DUMMY pip server certificate, not a real one: a self-signed CA certificate
+# (its key was thrown away) so the build has something to add.
+# On prod, replace this file with the pip server's certificate or the company
+# CA that signed it (PEM, BEGIN CERTIFICATE, no private key).
+# podman/Containerfile.ibn-dev adds it to the system trust store (update-ca-trust).
+-----BEGIN CERTIFICATE-----
+MIIDXzCCAkegAwIBAgIUP9lCO9fnDkt3DpZXxspYH6M9gDwwDQYJKoZIhvcNAQEL
+BQAwPjE8MDoGA1UEAwwza2lkZSBkdW1teSBwaXAgc2VydmVyIGNlcnRpZmljYXRl
+IC0gcmVwbGFjZSBvbiBwcm9kMCAXDTI2MTAwNzE3MTA1NFoYDzIxMjYwOTEzMTcx
+MDU0WjA+MTwwOgYDVQQDDDNraWRlIGR1bW15IHBpcCBzZXJ2ZXIgY2VydGlmaWNh
+dGUgLSByZXBsYWNlIG9uIHByb2QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+AoIBAQCX+buRQAxFy7Uix/Ttnf6zehjgdaMtjQHdRmyH5BomnkULSKeK69xYrDYp
+AaPMMvH7nvh3UVjRrpPN/F7X68U5hkfiRW9np67hJUmNM79A3V2xTlllHW7q2bnT
+JLeAewMuT08Ny7yDKztd+5DnfQokX38KNLxoUVQv3L8QDPEEKqOA8IVtnxxFliS0
+ZorGwqs2Tj30Ev9JEBiv7FemskqdKZ6xLcRU5gZRiWKzMbx8Y+PVTyP/7F9XT0cO
+Dw6Q0d1UZLqURjwEMxSHKHHBl2TB5CVGlnfQDZAej/sfXm0rLvJ83716O1h6o0Nc
+y1ugfCrPaSlSht7rj3kybzPESnbnAgMBAAGjUzBRMB0GA1UdDgQWBBTQ52JnoOFa
+J2RspT06C71hpLy3/DAfBgNVHSMEGDAWgBTQ52JnoOFaJ2RspT06C71hpLy3/DAP
+BgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBMMziAXjPKaFiVhkU3
++uo5GAuTAwkkfkWZn1JmwCXWBCaLj4ZzV8JfUQwMjozsxZl9prZCvHLbBvOmZnFy
+IJeeN0jL6Js6EdxvfAzW/oOzNop/yErEOiglCyOBeXjkw35jaPHLi1Q56mm+n7P6
+gytkGpaK1eCTidhg32jHBLBKqXuzSsd2rQZYYxxrFGrd2gSzWRYQah/UmquFc0r6
+tydhIYE2Zp2W5wljHd9M7aq5QpvMUIIgW+FTlhpQIjlvZWxhqEUlFg6Wu1eV8mM2
+s4pQ2XdwrKLLDh3vQSpNAsDMF6bCxWS5ShvDzjoBToM+4HkwDl5XcicuKgsZag0l
+qEmZ
+-----END CERTIFICATE-----

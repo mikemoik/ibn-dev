@@ -1,0 +1,4 @@
+# podman build context (podman/Containerfile.ibn-dev, devcontainer/Containerfile):
+# only what git tracks
+.git
+dist.staging

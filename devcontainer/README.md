@@ -1,0 +1,72 @@
+# ibn-devcontainer: a VS Code dev container
+
+The ibn-dev build environment (`podman/Containerfile.ibn-dev`, see the
+[README](../README.md)) for VS
+Code's Dev Containers extension with podman. VS Code is the editor and bash
+is the shell. `devcontainer/Containerfile` is a thin layer on top of ibn-dev:
+it only adds `~/.vscode-server`, owned by `KIDE_USER`, for the volume below.
+
+What is in it, all from ibn-dev:
+
+- the RHEL9 packages: gcc/g++, make, cmake, clangd/clang-format/clang-tidy,
+  gdb, lldb (`lldb-dap`), git, perl + perl-Dumpvalue, Python 3.12 with numpy
+  and pybind11, opencv, glew, glfw, gdal + gdal-libs, Qt5, libtiff, and the
+  -devel packages GDAL's build needs
+- `build-dist.sh` with `dist/` (in `/opt/ibn-dev/dist`, on `PATH`): run once in
+  the container, it builds CMake 4 (ahead of RHEL's on `PATH`), onnxruntime,
+  ACE+TAO 8 + OpenDDS 3.34 (`tao_idl`, `opendds_idl`, `find_package(OpenDDS)`)
+  and GDAL 3.10.3 with GTiff (`find_package(GDAL)`) into `/workspace/ibn-dist/{bin,include,lib,lib64,share}`, that is, into
+  `ibn-dist/` in the mounted project on the host;
+  found by the dynamic linker through `LD_LIBRARY_PATH`, and by pkg-config
+  (`ACE`, `TAO`, `TAO_*`, `libonnxruntime`, `gdal`) through `PKG_CONFIG_PATH`;
+  `~/.bashrc` sources `ibn-dist/bin/ibn-dist-env.sh` (`CMAKE_PREFIX_PATH`,
+  `CPLUS_INCLUDE_PATH`, `LIBRARY_PATH`, `ACE_ROOT`/`TAO_ROOT`/`DDS_ROOT`,
+  `GDAL_DATA`)
+- pip/uv config and the pip server certificate from `CONF_DIR`, and pip + uv
+  in `KIDE_USER`'s `~/.local`
+- `safe.directory = *` for git
+
+No terminal IDE (that is kide, a separate repo), so no Rust or Go build. The
+dist compile (~8–9 min) happens later, in the container (`build-dist.sh`).
+
+## Build
+
+From the repo root, with the same `podman/base.conf` as ibn-dev
+(`KIDE_USER`; the other args are not used here). ibn-dev first, if it is not
+built yet:
+
+    podman build --build-arg-file podman/base.conf -t ibn-dev -f podman/Containerfile.ibn-dev .
+    podman build --build-arg-file podman/base.conf -t ibn-devcontainer -f devcontainer/Containerfile .
+
+`--build-arg IBN_DEV=<image>` builds on another ibn-dev image (default
+`localhost/ibn-dev`).
+
+## Use
+
+1. VS Code setting: `"dev.containers.dockerPath": "podman"`.
+2. Copy `devcontainer/devcontainer.json` to `<project>/.devcontainer/devcontainer.json`.
+   If `podman/base.conf` sets a different `KIDE_USER`/`KIDE_UID`/`KIDE_GID`,
+   change `default`, `1001`, and the home path in `mounts` to match.
+3. *Dev Containers: Reopen in Container*.
+4. Once per project, in the container's terminal: `build-dist.sh`. This
+   installs the C/C++ libraries into `ibn-dist/` in the project directory
+   (add it to the project's `.gitignore`). New terminals pick up
+   `ibn-dist-env.sh`; in the one it ran in, run
+   `. /workspace/ibn-dist/bin/ibn-dist-env.sh` once.
+
+What the template sets:
+
+- The project is mounted on `/workspace` with `Z`, which relabels it for SELinux (needed on RHEL).
+- `--userns=keep-id:uid=1001,gid=1001` maps your host user to `default`, so
+  files written in the project stay yours. Rootless podman only.
+  `updateRemoteUserUID: false`: the mapping already does this.
+- `--http-proxy=false`: the host's proxy variables stay out. As a fallback, `~/.bashrc` unsets them too.
+- The `ibn-devcontainer-vscode` volume on `~/.vscode-server` keeps VS Code's server
+  and extensions across rebuilt containers.
+- Extensions: clangd, lldb-dap, CMake Tools, Python. Their settings point at
+  `/usr/bin/clangd`, `/usr/bin/lldb-dap`, `/workspace/ibn-dist/bin/cmake` and
+  `/usr/bin/python3.12`.
+
+To use the image without VS Code (a shell):
+
+    podman run --rm -it --http-proxy=false --userns=keep-id:uid=1001,gid=1001 -v "$PWD:/workspace:Z" ibn-devcontainer bash
