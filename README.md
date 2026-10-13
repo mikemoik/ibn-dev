@@ -2,7 +2,8 @@
 
 The RHEL9 build environment for C/C++ and Python projects, as a podman
 image: the RHEL toolchain and libraries, plus the C/C++ libraries dnf does not
-have (CMake 4, onnxruntime, ACE+TAO, OpenDDS, GDAL with GTiff), built
+have (CMake 4, onnxruntime, ACE+TAO, OpenDDS, GDAL with GTiff and its PROJ
+and GEOS), built
 **offline from source** out of the upstream release tarballs in `dist/`. Your
 projects are built in the container, installed to the mounted `~/workspace`,
 and run on the host against those libraries.
@@ -31,8 +32,9 @@ gdal, protobuf for opencv, GL libraries for glew/glfw):
 - the RHEL packages (from AppStream/CRB/EPEL): gcc/g++, make, cmake,
   clangd/clang-format/clang-tidy, gdb, lldb, git, perl + perl-Dumpvalue,
   Python 3.12 with numpy and pybind11, opencv, glew, glfw, gdal + gdal-libs,
-  Qt5 (`qt5`), libtiff + libtiff-devel, and the -devel packages GDAL's build
-  needs (proj, geos, json-c, sqlite, libcurl, expat, zlib)
+  Qt5 (`qt5`), libtiff + libtiff-devel, and what the PROJ/GEOS/GDAL build
+  needs (sqlite, and the -devel packages of sqlite, libcurl, expat, zlib; all
+  BaseOS/AppStream, no CRB)
 - `build-dist.sh` with `dist/` in `/opt/ibn-dev/dist` (`build-dist.sh` on
   `PATH`), not the built libraries ([Libraries](#libraries-built-into-workspaceibn-dist))
 - pip (newest) and uv for Python 3.12, pip-installed by the image's user
@@ -94,19 +96,22 @@ after an image update that changes `dist/`.
 | onnxruntime 1.30.0 (CPU) | upstream's prebuilt Linux x64 tarball | `include/onnxruntime`, `lib64`; `find_package(onnxruntime)` → `onnxruntime::onnxruntime`, `pkg-config libonnxruntime` |
 | ACE 8.0.8 + TAO 4.0.8 | source, compiled by `build-dist.sh` | `lib/libACE*`, `libTAO*`, `include/{ace,tao,orbsvcs}`, `bin/tao_idl`; TAO_IDL's headers in `share/tao/TAO_IDL/{include,be_include}` |
 | OpenDDS 3.34.0 (+ RapidJSON headers) | source, compiled by `build-dist.sh` with OpenDDS's `configure` | `lib/libOpenDDS_*`, `include/dds`, `bin/opendds_idl`; `find_package(OpenDDS)` with `opendds_target_sources()` |
+| PROJ 9.6.0, GEOS 3.13.1 | source, compiled by `build-dist.sh` with CMake | `lib64/libproj.so.25`, `libgeos_c.so.1`, `include/proj*.h`, `geos*.h`, `bin/projinfo` etc., `share/proj` (`proj.db`); `find_package(PROJ)`, `find_package(GEOS)` |
 | GDAL 3.10.3 (with GTiff/COG) | source, compiled by `build-dist.sh` with CMake | `lib64/libgdal.so.36`, `include/gdal*.h` etc., `bin/gdalinfo` etc., `share/gdal`; `find_package(GDAL)` → `GDAL::GDAL`, `pkg-config gdal` |
 
-ACE+TAO, OpenDDS and GDAL compile (release builds, no tests); their libraries
-find each other through `$ORIGIN`-relative RPATHs. GDAL is built because
-RHEL9's `gdal-libs` (AppStream) is a minimal build whose only raster drivers
-are VRT and MEM, without GTiff. This build has the GTiff/COG driver and
-GDAL's other built-in drivers. It links the same RHEL libraries as RHEL's
-(proj, geos, json-c, sqlite, libcurl, expat, zlib) plus libtiff, with
-GDAL's internal libgeotiff, so a host with RHEL's `gdal-libs` installed has
-everything it needs. It has the same soname (`libgdal.so.36`): libraries
-linked against RHEL's GDAL (opencv) use this one in programs that load it.
-`NO_GDAL=1 build-dist.sh` skips GDAL (for boxes whose repos lack proj-devel,
-like UBI9's). `build-dist.sh` removes the build-tree paths OpenDDS leaves in
+ACE+TAO, OpenDDS, PROJ, GEOS and GDAL compile (release builds, no tests);
+their libraries find each other through `$ORIGIN`-relative RPATHs. GDAL is
+built because RHEL9's `gdal-libs` (AppStream) is a minimal build whose only
+raster drivers are VRT and MEM, without GTiff. This build has the GTiff/COG
+driver and GDAL's other built-in drivers. PROJ and GEOS are built because
+RHEL9 has their libraries in AppStream but `proj-devel`/`geos-devel` only in
+CRB, which RHEL hosts usually do not have; they are the same versions as
+RHEL's (same sonames). GDAL uses its internal json-c (`json-c-devel` is CRB
+only too) and libgeotiff (EPEL only), and RHEL's sqlite, libcurl, expat,
+zlib and libtiff. It has the same soname as RHEL's (`libgdal.so.36`):
+libraries linked against RHEL's GDAL (opencv) use this one in programs that
+load it. PROJ finds `share/proj` next to its library, so it needs no
+environment variable. `NO_GDAL=1 build-dist.sh` skips PROJ, GEOS and GDAL. `build-dist.sh` removes the build-tree paths OpenDDS leaves in
 its installed `share/cmake/OpenDDS/config.cmake`, so the package resolves to
 `PREFIX`.
 
@@ -232,13 +237,16 @@ extension with podman): a thin layer adding `~/.vscode-server`, and a
 ## Testing
 
 - `test/run.sh` builds a clean `registry.access.redhat.com/ubi9/ubi` image
-  with only the toolchain RPMs, then runs `NO_GDAL=1 build-dist.sh` in it
+  with only RPMs from its own repos (no CRB/EPEL, like the RHEL hosts), then
+  runs `build-dist.sh` in it
   with `--network=none` and a read-only copy of the files git tracks (`git
   add` new files first). `test/devlibs`: the bundled cmake is 4.x and builds
   a project that finds onnxruntime and OpenDDS, generates code from an IDL
   file (tao_idl + opendds_idl) and links both; it runs, and `tao_idl` and
-  `opendds_idl` still start once the build directory is gone. GDAL and the
-  RHEL/EPEL packages are not in the UBI image; the next test covers them.
+  `opendds_idl` still start once the build directory is gone. GDAL has GTiff,
+  links the dist's PROJ/GEOS (UBI has neither) and finds `proj.db`
+  (`gdalsrsinfo EPSG:25832`). The RHEL/EPEL packages (opencv etc.) are not in
+  the UBI image; the next test covers them and a program using GDAL.
 - `test/prodsim/run.sh` tests the workflow with a stand-in for the prod
   software (`test/prodsim`): IDL compiler on TAO's front end, CORBA, DDS,
   GDAL (GeoTIFF), onnxruntime, RapidJSON and an OpenGL viewer. It builds the
@@ -255,6 +263,52 @@ extension with podman): a thin layer adding `~/.vscode-server`, and a
 3. `test/run.sh` and `test/prodsim/run.sh` (after rebuilding the image) must
    pass before committing.
 4. Update the table below for a new component, review `git status`, commit.
+
+## Checksums
+
+Every tarball in `dist/` is pinned by sha256 in `manifest/dist.tsv`.
+`build-dist.sh` (offline) and `scripts/dist-update.sh` check those pins
+before use. The pins themselves were checked against what upstream
+publishes, where it publishes something. To repeat a check by hand, run from
+the repo root (the upstream ones need network):
+
+    # pins (offline, what build-dist.sh does first)
+    awk -F'\t' '!/^#/ && NF { print $6 "  " $4 }' manifest/dist.tsv | (cd dist && sha256sum -c -)
+
+    # cmake: upstream's SHA-256 list (signed: cmake-4.4.4-SHA-256.txt.asc)
+    curl -fsSL https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt |
+      grep ' cmake-4.4.4-linux-x86_64.tar.gz$' | (cd dist && sha256sum -c -)
+
+    # onnxruntime: no checksum file; GitHub's asset digest of the release
+    curl -fsSL https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.30.0 |
+      grep -A30 '"name": "onnxruntime-linux-x64-1.30.0.tgz"' | grep -m1 '"digest"'
+    sha256sum dist/onnxruntime-linux-x64-1.30.0.tgz
+
+    # ACE+TAO: upstream's md5 (the file names the packager's path, compare the hash)
+    curl -fsSL 'https://github.com/DOCGroup/ACE_TAO/releases/download/ACE%2BTAO-8_0_8/ACE%2BTAO-src-8.0.8.tar.bz2.md5'
+    md5sum dist/ACE+TAO-src-8.0.8.tar.bz2
+
+    # OpenDDS: upstream's sha256 list
+    curl -fsSL https://github.com/OpenDDS/OpenDDS/releases/download/v3.34.0/OpenDDS-3.34.0.sha256 |
+      grep ' OpenDDS-3.34.0.tar.gz$' | (cd dist && sha256sum -c -)
+
+    # RapidJSON: GitHub's archive of the pinned commit, no upstream checksum;
+    # the pin is the commit id plus the sha256 recorded when it was fetched
+
+    # PROJ: upstream's md5
+    curl -fsSL https://github.com/OSGeo/PROJ/releases/download/9.6.0/proj-9.6.0.tar.gz.md5
+    md5sum dist/proj-9.6.0.tar.gz
+
+    # GEOS: no upstream checksum; the GitHub release asset and the copy on
+    # download.osgeo.org are identical
+    curl -fsSL https://download.osgeo.org/geos/geos-3.13.1.tar.bz2 | sha256sum
+    sha256sum dist/geos-3.13.1.tar.bz2
+
+    # GDAL: upstream's md5 (signed: gdal-3.10.3.tar.gz.sig)
+    curl -fsSL https://github.com/OSGeo/gdal/releases/download/v3.10.3/gdal-3.10.3.tar.gz.md5
+    md5sum dist/gdal-3.10.3.tar.gz
+
+For a new pin, run the matching upstream check before committing.
 
 ## Moving the repo to an on-prem GitLab
 
@@ -282,7 +336,9 @@ Everything in `dist/`, with the pinned upstream version and its license.
 |---|---|---|---|
 | dist/ace-tao | <https://github.com/DOCGroup/ACE_TAO/releases/download/ACE%2BTAO-8_0_8/ACE%2BTAO-src-8.0.8.tar.bz2> | `8.0.8 (source)` | DOC (`ACE_wrappers/COPYING`) |
 | dist/cmake | <https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-x86_64.tar.gz> | `4.4.4 (prebuilt)` | BSD-3-Clause (`Copyright.txt`; the binary tarball bundles its third-party notices in `doc/cmake`) |
+| dist/geos | <https://github.com/libgeos/geos/releases/download/3.13.1/geos-3.13.1.tar.bz2> | `3.13.1 (source)` | LGPL-2.1-or-later (`COPYING`; shared libraries, linked dynamically) |
 | dist/gdal | <https://github.com/OSGeo/gdal/releases/download/v3.10.3/gdal-3.10.3.tar.gz> | `3.10.3 (source)` | MIT (`LICENSE.TXT`, which lists the few differently licensed parts, none of them built here) |
 | dist/onnxruntime | <https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-linux-x64-1.30.0.tgz> | `1.30.0 (prebuilt)` | MIT (`LICENSE`, `ThirdPartyNotices.txt` next to it) |
 | dist/opendds | <https://github.com/OpenDDS/OpenDDS/releases/download/v3.34.0/OpenDDS-3.34.0.tar.gz> | `3.34.0 (source)` | LicenseRef-OpenDDS (`LICENSE`: permissive OCI license, no SPDX id) |
+| dist/proj | <https://github.com/OSGeo/PROJ/releases/download/9.6.0/proj-9.6.0.tar.gz> | `9.6.0 (source)` | MIT (`COPYING`) |
 | dist/rapidjson | <https://github.com/Tencent/rapidjson/archive/fd3dc29a5c2852df569e1ea81dbde2c412ac5051.tar.gz> | `fd3dc29a5c28` | MIT (`license.txt`; `bin/jsonchecker` is under the JSON license, not used) |

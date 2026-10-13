@@ -10,12 +10,12 @@ What is in it, all from ibn-dev:
 
 - the RHEL9 packages: gcc/g++, make, cmake, clangd/clang-format/clang-tidy,
   gdb, lldb (`lldb-dap`), git, perl + perl-Dumpvalue, Python 3.12 with numpy
-  and pybind11, opencv, glew, glfw, gdal + gdal-libs, Qt5, libtiff, and the
-  -devel packages GDAL's build needs
+  and pybind11, opencv, glew, glfw, gdal + gdal-libs, Qt5, libtiff, and what
+  the PROJ/GEOS/GDAL build needs (BaseOS/AppStream only)
 - `build-dist.sh` with `dist/` (in `/opt/ibn-dev/dist`, on `PATH`): run once in
   the container, it builds CMake 4 (ahead of RHEL's on `PATH`), onnxruntime,
   ACE+TAO 8 + OpenDDS 3.34 (`tao_idl`, `opendds_idl`, `find_package(OpenDDS)`)
-  and GDAL 3.10.3 with GTiff (`find_package(GDAL)`) into `/workspace/ibn-dist/{bin,include,lib,lib64,share}`, that is, into
+  and GDAL 3.10.3 with GTiff on PROJ 9.6 + GEOS 3.13 (`find_package(GDAL)`) into `/workspace/ibn-dist/{bin,include,lib,lib64,share}`, that is, into
   `ibn-dist/` in the mounted project on the host;
   found by the dynamic linker through `LD_LIBRARY_PATH`, and by pkg-config
   (`ACE`, `TAO`, `TAO_*`, `libonnxruntime`, `gdal`) through `PKG_CONFIG_PATH`;

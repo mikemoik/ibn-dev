@@ -6,6 +6,7 @@
 #   PREFIX/{include,lib64}            onnxruntime (upstream's prebuilt)
 #   PREFIX/{bin,include,lib,share}    ACE+TAO 8 + OpenDDS 3.34 built from source
 #   PREFIX/share/tao/TAO_IDL/{include,be_include}  TAO_IDL headers (from source)
+#   PREFIX/{bin,include,lib64,share/proj}  PROJ 9.6 + GEOS 3.13 built from source
 #   PREFIX/{bin,include,lib64,share/gdal}  GDAL 3.10 built from source, with GTiff
 #   PREFIX/bin/ibn-dist-env.{sh,fish}  sets the environment for all of the above
 #                                     (source it; finds PREFIX from its own path)
@@ -14,9 +15,10 @@
 # IBN_DIST_PREFIX=/workspace/ibn-dist, so it is run once inside the
 # container and installs into the mounted ~/workspace/ibn-dist, where the
 # host can use the result.
-# Needs gcc/g++, make, perl, perl-Dumpvalue and bzip2, and for GDAL the RHEL
-# -devel packages of proj, geos, libtiff, json-c, sqlite, libcurl, expat, zlib
-# (NO_GDAL=1 skips GDAL, e.g. on UBI9, whose repos lack proj/geos/json-c).
+# Needs gcc/g++, make, perl, perl-Dumpvalue and bzip2, and for PROJ/GEOS/GDAL
+# sqlite (the sqlite3 tool) and the -devel packages of sqlite, libtiff,
+# libcurl, expat and zlib, all in RHEL9's BaseOS/AppStream, no CRB or EPEL
+# (NO_GDAL=1 skips PROJ, GEOS and GDAL).
 # Intermediate files go to $IBN_BUILD_DIR (default: $TMPDIR/ibn-build); JOBS
 # (default nproc) parallel make jobs.
 set -euo pipefail
@@ -31,11 +33,13 @@ log() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 for tool in cc c++ make perl bzip2 tar sha256sum; do
   command -v "$tool" >/dev/null || { echo "missing build tool: $tool" >&2; exit 1; }
 done
+[ "${NO_GDAL:-}" = 1 ] || command -v sqlite3 >/dev/null ||
+  { echo "missing build tool: sqlite3 (PROJ builds proj.db with it; NO_GDAL=1 skips PROJ/GEOS/GDAL)" >&2; exit 1; }
 mkdir -p "$PREFIX" "$BUILD"
 
 # upstream release tarballs (manifest/dist.tsv), sha256-checked first. cmake
 # and onnxruntime are upstream's own Linux x86_64 builds, unpacked as shipped;
-# ACE+TAO, OpenDDS and RapidJSON are source and compiled here.
+# ACE+TAO, OpenDDS, RapidJSON, PROJ, GEOS and GDAL are source and compiled here.
 log "dist: checking tarballs"
 awk -F'\t' '!/^#/ && NF { print $6 "  " $4 }' "$ROOT/manifest/dist.tsv" |
   (cd "$ROOT/dist" && sha256sum -c --quiet -)
@@ -132,15 +136,36 @@ cp -a "$dds/ACE_wrappers/TAO/TAO_IDL/include" "$dds/ACE_wrappers/TAO/TAO_IDL/be_
   "$PREFIX/share/tao/TAO_IDL/"
 
 if [ "${NO_GDAL:-}" = 1 ]; then
-  log "GDAL: skipped (NO_GDAL=1)"
+  log "PROJ, GEOS, GDAL: skipped (NO_GDAL=1)"
 else
+  # PROJ and GEOS for GDAL: RHEL9 has their libraries (AppStream) but the
+  # -devel packages only in CRB, which RHEL hosts usually lack. Built here at
+  # the same versions as RHEL's (same sonames libproj.so.25, libgeos_c.so.1),
+  # so a program that also loads RHEL's GDAL (through opencv) gets one copy
+  # that fits both. PROJ finds its share/proj (proj.db) next to its library,
+  # wherever PREFIX is seen. Release builds, no tests; RPATHs $ORIGIN-relative.
+  for lib in proj geos; do
+    log "$lib"
+    src=$BUILD/$lib
+    rm -rf "$src"
+    mkdir -p "$src/src"
+    tar -xf "$(dist "$lib")" -C "$src/src" --strip-components=1
+    "$PREFIX/bin/cmake" -S "$src/src" -B "$src/build" -D CMAKE_BUILD_TYPE=Release \
+      -D CMAKE_INSTALL_PREFIX="$PREFIX" -D CMAKE_INSTALL_LIBDIR=lib64 -D CMAKE_INSTALL_RPATH='$ORIGIN/../lib64' \
+      -D BUILD_TESTING=OFF \
+      >"$src/configure.log" 2>&1 &&
+      "$PREFIX/bin/cmake" --build "$src/build" -j "$JOBS" >"$src/make.log" 2>&1 &&
+      "$PREFIX/bin/cmake" --install "$src/build" >"$src/install.log" 2>&1 ||
+      { tail -30 "$src/configure.log" "$src/make.log" "$src/install.log" 2>/dev/null; exit 1; }
+  done
+
   log "GDAL"
   # RHEL9's gdal-libs (AppStream) is a minimal build: its only raster drivers are
   # VRT and MEM, no GTiff. This one has GTiff/COG and the rest of GDAL's
-  # built-in drivers, against the same libraries as RHEL's build (proj, geos,
-  # json-c, sqlite, libcurl, expat, zlib; all of them in AppStream/BaseOS, so a
-  # host with gdal-libs has them) plus libtiff; libgeotiff is GDAL's internal
-  # copy (EPEL only). GDAL_USE_EXTERNAL_LIBS=OFF: nothing else is picked up just
+  # built-in drivers, against PROJ and GEOS from above, GDAL's internal json-c
+  # and libgeotiff (json-c-devel is CRB only, libgeotiff EPEL only) and RHEL's
+  # sqlite, libcurl, expat, zlib and libtiff (AppStream/BaseOS).
+  # GDAL_USE_EXTERNAL_LIBS=OFF: nothing else is picked up just
   # because its -devel package happens to be installed. Same version and soname
   # as RHEL's (libgdal.so.36), so libraries linked against RHEL's (opencv) use
   # this one in programs that load it first. RPATHs are $ORIGIN-relative.
@@ -151,10 +176,10 @@ else
   mkdir -p "$gdal/src"
   tar -xzf "$(dist gdal)" -C "$gdal/src" --strip-components=1
   "$PREFIX/bin/cmake" -S "$gdal/src" -B "$gdal/build" -D CMAKE_BUILD_TYPE=Release \
-    -D CMAKE_INSTALL_PREFIX="$PREFIX" -D CMAKE_INSTALL_LIBDIR=lib64 -D GDAL_SET_INSTALL_RELATIVE_RPATH=ON \
+    -D CMAKE_PREFIX_PATH="$PREFIX" -D CMAKE_INSTALL_PREFIX="$PREFIX" -D CMAKE_INSTALL_LIBDIR=lib64 -D GDAL_SET_INSTALL_RELATIVE_RPATH=ON \
     -D BUILD_TESTING=OFF -D BUILD_PYTHON_BINDINGS=OFF -D BUILD_JAVA_BINDINGS=OFF -D BUILD_CSHARP_BINDINGS=OFF \
     -D GDAL_USE_EXTERNAL_LIBS=OFF -D GDAL_USE_GEOS=ON -D GDAL_USE_TIFF=ON -D GDAL_USE_GEOTIFF_INTERNAL=ON \
-    -D GDAL_USE_JSONC=ON -D GDAL_USE_SQLITE3=ON -D GDAL_USE_CURL=ON -D GDAL_USE_EXPAT=ON -D GDAL_USE_ZLIB=ON \
+    -D GDAL_USE_JSONC_INTERNAL=ON -D GDAL_USE_SQLITE3=ON -D GDAL_USE_CURL=ON -D GDAL_USE_EXPAT=ON -D GDAL_USE_ZLIB=ON \
     >"$gdal/configure.log" 2>&1 &&
     "$PREFIX/bin/cmake" --build "$gdal/build" -j "$JOBS" >"$gdal/make.log" 2>&1 &&
     "$PREFIX/bin/cmake" --install "$gdal/build" >"$gdal/install.log" 2>&1 ||

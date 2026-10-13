@@ -8,4 +8,6 @@ onnxruntime	prebuilt	1.30.0	onnxruntime-linux-x64-1.30.0.tgz	https://github.com/
 ace-tao	source	8.0.8	ACE+TAO-src-8.0.8.tar.bz2	https://github.com/DOCGroup/ACE_TAO/releases/download/ACE%2BTAO-8_0_8/ACE%2BTAO-src-8.0.8.tar.bz2	803747be9aecc45f0530a5beff8617a6afff7e48e1c9f59a127a2fc3869c8528
 opendds	source	3.34.0	OpenDDS-3.34.0.tar.gz	https://github.com/OpenDDS/OpenDDS/releases/download/v3.34.0/OpenDDS-3.34.0.tar.gz	72168cb60c6e66424d9006535015ade1072581111a27507dbfffab3faffde6e2
 rapidjson	source	fd3dc29a5c2852df569e1ea81dbde2c412ac5051	rapidjson-fd3dc29a5c2852df569e1ea81dbde2c412ac5051.tar.gz	https://github.com/Tencent/rapidjson/archive/fd3dc29a5c2852df569e1ea81dbde2c412ac5051.tar.gz	c8ed60cbf2976aa94491af7d6024d029a5232e23f21998a78bbc0725188cf3aa
+proj	source	9.6.0	proj-9.6.0.tar.gz	https://github.com/OSGeo/PROJ/releases/download/9.6.0/proj-9.6.0.tar.gz	d8cae521c311c39513193657e75767f7cfbf2f91bd202fcd4a200028d3b57e14
+geos	source	3.13.1	geos-3.13.1.tar.bz2	https://github.com/libgeos/geos/releases/download/3.13.1/geos-3.13.1.tar.bz2	df2c50503295f325e7c8d7b783aca8ba4773919cde984193850cf9e361dfd28c
 gdal	source	3.10.3	gdal-3.10.3.tar.gz	https://github.com/OSGeo/gdal/releases/download/v3.10.3/gdal-3.10.3.tar.gz	e4bf7f104acbcb3e2d16c97fd1af2b92b28d0ba59d17d976e3ef08b794f4153b

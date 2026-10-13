@@ -1,7 +1,8 @@
 # Clean RHEL9 with only packages from the RHEL repos. The build itself runs
 # with --network=none (see test/run.sh).
 FROM registry.access.redhat.com/ubi9/ubi:latest
-# what build-dist.sh needs for CMake 4, onnxruntime and ACE+TAO/OpenDDS (GDAL
-# is skipped: UBI9's repos lack proj-devel, geos-devel and json-c-devel)
+# what build-dist.sh needs for CMake 4, onnxruntime, ACE+TAO/OpenDDS and
+# PROJ/GEOS/GDAL (UBI9's repos have no CRB or EPEL, like the RHEL hosts)
 RUN dnf -y install gcc gcc-c++ make perl perl-Dumpvalue bzip2 tar findutils diffutils \
+        sqlite sqlite-devel libtiff-devel libcurl-devel expat-devel zlib-devel \
     && dnf clean all

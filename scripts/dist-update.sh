@@ -8,7 +8,7 @@
 # build-dist.sh never downloads anything.
 #
 #   manifest/dist.tsv   name <TAB> kind <TAB> version <TAB> file <TAB> url <TAB> sha256
-#                       (cmake, onnxruntime, ACE+TAO, OpenDDS, RapidJSON, GDAL)
+#                       (cmake, onnxruntime, ACE+TAO, OpenDDS, RapidJSON, PROJ, GEOS, GDAL)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)

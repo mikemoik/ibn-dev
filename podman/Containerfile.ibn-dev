@@ -29,9 +29,10 @@ USER root
 # numpy and pybind11, opencv, glew, glfw, gdal, Qt5, libtiff. shadow-utils
 # (useradd/usermod) for KIDE_USER below.
 # GDAL itself to build against is not RHEL's (its gdal-libs has no GTiff):
-# build-dist.sh builds GDAL 3.10.3 into the dist; the -devel packages of the
-# libraries it uses are here (proj, geos, json-c, sqlite, libcurl, expat,
-# zlib, libtiff). gdal + gdal-libs stay: opencv links RHEL's libgdal.so.36.
+# build-dist.sh builds PROJ, GEOS and GDAL 3.10.3 into the dist; what that
+# needs from RHEL is here (sqlite, and the -devel packages of sqlite, libcurl,
+# expat, zlib, libtiff; all BaseOS/AppStream, no CRB). gdal + gdal-libs stay:
+# opencv links RHEL's libgdal.so.36.
 ARG CONF_DIR
 COPY $CONF_DIR/ubi.repo /etc/yum.repos.d/ubi.repo
 COPY $CONF_DIR/repos.sh /tmp/repos.sh
@@ -41,7 +42,7 @@ RUN /tmp/repos.sh && dnf -y install python3 git-core file findutils diffutils sh
         python3.12-pybind11 python3.12-pybind11-devel \
         opencv-devel glew-devel glfw glfw-devel \
         gdal gdal-libs qt5 libtiff libtiff-devel \
-        proj-devel geos-devel json-c-devel sqlite-devel libcurl-devel expat-devel zlib-devel \
+        sqlite sqlite-devel libcurl-devel expat-devel zlib-devel \
     && dnf clean all
 # pip-server.crt is the pip server's certificate (or the company CA that signed
 # it; PEM, no private key; the repo has a dummy). It goes into the system trust
