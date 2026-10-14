@@ -33,7 +33,7 @@ gdal-libs, protobuf for opencv, GL libraries for glew/glfw):
 - the RHEL packages (from AppStream/CRB/EPEL): gcc/g++, make, cmake,
   clangd/clang-format/clang-tidy, gdb, lldb, git, perl + perl-Dumpvalue,
   Python 3.12 with numpy and pybind11, opencv, glew, glfw, gdal-libs (for opencv),
-  Qt5 (`qt5`), libtiff + libtiff-devel, and what the PROJ/GEOS/GDAL build
+  Qt5 (`qt5`, and `qt5-qtbase-devel` for its CMake configs), libtiff + libtiff-devel, and what the PROJ/GEOS/GDAL build
   needs (sqlite, and the -devel packages of sqlite, libcurl, expat, zlib; all
   BaseOS/AppStream, no CRB)
 - `build-dist.sh` with `dist/` in `/opt/ibn-dev/dist` (`build-dist.sh` on

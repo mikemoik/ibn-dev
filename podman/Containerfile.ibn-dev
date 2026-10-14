@@ -27,7 +27,7 @@ USER root
 # The RHEL packages: gcc/g++, make, cmake, tar/gzip/bzip2 and perl +
 # perl-Dumpvalue (also what build-dist.sh needs; MPC, ACE+TAO/OpenDDS
 # tooling), clangd/clang-format/clang-tidy, gdb, lldb, git, Python 3.12 with
-# numpy and pybind11, opencv, glew, glfw, gdal-libs, Qt5, libtiff. shadow-utils
+# numpy and pybind11, opencv, glew, glfw, gdal-libs, Qt5 + qt5-qtbase-devel (CMake configs), libtiff. shadow-utils
 # (useradd/usermod) for KIDE_USER below.
 # GDAL itself to build against is not RHEL's (its gdal-libs has no GTiff):
 # build-dist.sh builds PROJ, GEOS and GDAL 3.10.3 into the dist; what that
@@ -43,7 +43,7 @@ RUN /tmp/repos.sh && dnf -y install python3 git-core file findutils diffutils sh
         perl perl-Dumpvalue python3.12 python3.12-pip python3.12-numpy \
         python3.12-pybind11 python3.12-pybind11-devel \
         opencv-devel glew-devel glfw glfw-devel \
-        gdal-libs qt5 libtiff libtiff-devel \
+        gdal-libs qt5 qt5-qtbase-devel libtiff libtiff-devel \
         sqlite sqlite-devel libcurl-devel expat-devel zlib-devel \
     && dnf clean all
 # pip-server.crt is the pip server's certificate (or the company CA that signed
