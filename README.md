@@ -18,6 +18,7 @@ built on top of this one (see [kide on top](#kide-on-top)).
 | `build-dist.sh` | builds the C/C++ libraries from `dist/` (run in the container) |
 | `dist/`, `manifest/dist.tsv` | upstream release tarballs kept as shipped, pinned + sha256-checked |
 | `dist-env/` | `ibn-dist-env.sh`/`.fish`, installed by `build-dist.sh` |
+| `container-shell/` | the shells' hooks: loader, `10-ibn-dev.sh`/`.fish` ([Shell hooks](#shell-hooks-workspacecontainer)) |
 | `devcontainer/` | `ibn-devcontainer`: the image as a VS Code dev container |
 | `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end) |
 | `scripts/dist-update.sh` | the only step that downloads: refreshes `dist/` and `VERSIONS` |
@@ -72,11 +73,32 @@ over (`podman save -o ibn-dev.tar ibn-dev`, then `podman load -i ibn-dev.tar`).
   podman (your normal user, not `sudo podman`) this maps your host user to
   it, so the files it writes stay yours (podman 4.3+).
 - `--http-proxy=false`: the host's proxy variables stay out (the build still
-  gets them, so dnf and pip can use the proxy). As a fallback, `~/.bashrc`
-  unsets them too.
+  gets them, so dnf and pip can use the proxy). As a fallback, the shells'
+  hook loader unsets them too.
 - Root inside for a one-off (e.g. `dnf install` to try a package): add
   `--user root` and leave out `--userns=…`. Not kept: the next container
   starts from the image again.
+
+### Shell hooks: /workspace/.container
+
+The shells' config is not baked into `~/.bashrc` (or a fish `config.fish`);
+those only source a loader (`/usr/local/share/container-shell/load.{sh,fish}`,
+from `container-shell/`). At every shell start the loader places the hooks
+every image layer ships (`/usr/local/share/container-shell/{bash,fish}/`) in
+the mounted workspace's `.container/{bash,fish}/` (host:
+`~/workspace/.container/`), then sources every `*.sh` (bash) or `*.fish`
+(fish) there in name order. This image's hooks are `10-ibn-dev.sh` and
+`10-ibn-dev.fish`: `~/.local/bin` (pip, uv) on `PATH`, and `ibn-dist-env.*`
+once `build-dist.sh` has installed it. The fish one is for an image with
+fish on top (kide, whose hooks are `20-kide.*`).
+
+- The image's hooks are the image's: a changed one is overwritten at the next
+  shell start. Your own config goes into files of your own, e.g. `50-my.sh`.
+- Each image only ships its own hooks; the number orders them (base images
+  low). `container-shell/{sync.sh,load.*}` are the same files in ibn-dev and
+  kide: keep them in step.
+- `/workspace` not writable: the hooks are sourced straight from the image.
+  A root shell places them too, owned by the workspace's owner.
 
 ### Libraries: built into /workspace/ibn-dist
 
@@ -125,8 +147,8 @@ against the libraries and running what links them: `PREFIX/bin` first on
 `GDAL_DATA=PREFIX/share/gdal` (GDAL's compiled-in data path is the `PREFIX`
 it was built in). They find `PREFIX` from their own path, so the same file
 works wherever `PREFIX` is seen, and sourcing one twice adds nothing twice.
-New bash shells in the container source `ibn-dist-env.sh` themselves; in the
-shell `build-dist.sh` ran in, source it once by hand. On the host:
+New shells in the container source it themselves (hook `10-ibn-dev.*`); in
+the shell `build-dist.sh` ran in, source it once by hand. On the host:
 
     . ~/workspace/ibn-dist/bin/ibn-dist-env.sh          # bash
     source ~/workspace/ibn-dist/bin/ibn-dist-env.fish   # fish
@@ -223,10 +245,12 @@ What the two repos share, and must keep in step:
 - `KIDE_USER`/`KIDE_UID`/`KIDE_GID`: the same values in both `base.conf`
   files (kide reuses the user ibn-dev created; its fish becomes the login
   shell)
-- `IBN_DIST_PREFIX` and `PREFIX/bin/ibn-dist-env.fish`: kide's fish config
-  sources it when it exists; bash in kide gets ibn-dev's `~/.bashrc` lines
+- `container-shell/{sync.sh,load.sh,load.fish}`: the same files in both
+  repos. Otherwise kide knows nothing of ibn-dev: ibn-dev's hooks
+  `10-ibn-dev.{sh,fish}` set its environment in kide's fish and bash, next to
+  kide's `20-kide.*` ([Shell hooks](#shell-hooks-workspacecontainer))
 - this file works on top of kide too: every step may run on a base that
-  already has it (the user, the bashrc lines, `safe.directory`)
+  already has it (the user, the loader lines, `safe.directory`)
 
 ## VS Code dev container
 

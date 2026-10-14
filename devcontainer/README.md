@@ -19,7 +19,7 @@ What is in it, all from ibn-dev:
   `ibn-dist/` in the mounted project on the host;
   found by the dynamic linker through `LD_LIBRARY_PATH`, and by pkg-config
   (`ACE`, `TAO`, `TAO_*`, `libonnxruntime`, `gdal`) through `PKG_CONFIG_PATH`;
-  `~/.bashrc` sources `ibn-dist/bin/ibn-dist-env.sh` (`CMAKE_PREFIX_PATH`,
+  the bash hook `10-ibn-dev.sh` sources `ibn-dist/bin/ibn-dist-env.sh` (`CMAKE_PREFIX_PATH`,
   `CPLUS_INCLUDE_PATH`, `LIBRARY_PATH`, `ACE_ROOT`/`TAO_ROOT`/`DDS_ROOT`,
   `GDAL_DATA`)
 - pip/uv config and the pip server certificate from `CONF_DIR`, and pip + uv
@@ -60,7 +60,10 @@ What the template sets:
 - `--userns=keep-id:uid=1001,gid=1001` maps your host user to `default`, so
   files written in the project stay yours. Rootless podman only.
   `updateRemoteUserUID: false`: the mapping already does this.
-- `--http-proxy=false`: the host's proxy variables stay out. As a fallback, `~/.bashrc` unsets them too.
+- `--http-proxy=false`: the host's proxy variables stay out. As a fallback, the shells' hook loader unsets them too.
+- The shell hooks go to `.container/` in the project directory (the mounted
+  `/workspace`; see the main README's *Shell hooks*): add it to the
+  project's `.gitignore` (your own hooks there are per project).
 - The `ibn-devcontainer-vscode` volume on `~/.vscode-server` keeps VS Code's server
   and extensions across rebuilt containers.
 - Extensions: clangd, lldb-dap, CMake Tools, Python. Their settings point at

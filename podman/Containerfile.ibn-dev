@@ -4,8 +4,9 @@
 # with GTiff). No IDE: the kide repo's podman/Containerfile.kide adds kide on
 # top of any base, this image included (and this file works on top of kide
 # too: every step here may run on a base that already has it). Shared with
-# kide: KIDE_USER/KIDE_UID/KIDE_GID, IBN_DIST_PREFIX and
-# PREFIX/bin/ibn-dist-env.{sh,fish}, which kide's fish config sources.
+# kide: KIDE_USER/KIDE_UID/KIDE_GID and container-shell/ (the shells' hook
+# directory /workspace/.container/{bash,fish}; this image's hooks are
+# 10-ibn-dev.{sh,fish}).
 # The base image and its repo setup are not in this file: podman/base.conf
 # (BASE, CONF_DIR, KIDE_USER/KIDE_UID/KIDE_GID, PIP_INDEX_URL).
 # Build from the repo root:
@@ -87,7 +88,7 @@ RUN git config --system --replace-all safe.directory '*'
 # into /workspace/ibn-dist/{bin,include,lib,lib64,share}, i.e. into the
 # host's ~/workspace/ibn-dist, where they stay for later containers and for
 # the host; with them PREFIX/bin/ibn-dist-env.{sh,fish}, which set the
-# environment (bash below and kide's fish config source them).
+# environment (the hooks 10-ibn-dev.{sh,fish} below source them).
 COPY build-dist.sh /opt/ibn-dev/dist/
 COPY dist-env /opt/ibn-dev/dist/dist-env
 COPY manifest/dist.tsv /opt/ibn-dev/dist/manifest/dist.tsv
@@ -104,14 +105,24 @@ ENV IBN_DIST_PREFIX=/workspace/ibn-dist \
     PATH=/workspace/ibn-dist/bin:$PATH \
     PKG_CONFIG_PATH=/workspace/ibn-dist/lib/pkgconfig:/workspace/ibn-dist/lib64/pkgconfig \
     LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64
+# The shells' config is in hooks: container-shell/load.{sh,fish}, sourced from
+# ~/.bashrc and ~/.config/fish/config.fish, place every hook the image layers
+# ship in /usr/local/share/container-shell/{bash,fish}/ in the mounted
+# workspace's /workspace/.container/{bash,fish}/ (host: ~/workspace/.container/)
+# at every shell start, then source all files there in name order, your own
+# included. This image's hooks are 10-ibn-dev.{sh,fish}: ~/.local/bin (pip and
+# uv) on PATH, ibn-dist-env.* once build-dist.sh has installed it
+# (CMAKE_PREFIX_PATH, CPLUS_INCLUDE_PATH, LIBRARY_PATH, ACE_ROOT, …). The
+# loaders also unset the host's proxy variables (fallback for
+# --http-proxy=false; podman build still passes them to the RUN steps, so
+# dnf/pip may use them). container-shell/{sync.sh,load.*} are the same files in
+# the kide repo; whichever layer comes last installs them again, unchanged.
+COPY container-shell /usr/local/share/container-shell
 # KIDE_USER (podman/base.conf): the user the image runs as. Taken from the base
 # image if it has it (e.g. "default" in Red Hat's application images, or kide's),
 # otherwise created with KIDE_UID/KIDE_GID. Its login shell becomes bash unless
-# the base made it fish (kide). Its ~/.bashrc and root's get, once each: ~/.local/bin
-# (pip and uv) on PATH, ibn-dist-env.sh once build-dist.sh has installed it
-# (CMAKE_PREFIX_PATH, CPLUS_INCLUDE_PATH, LIBRARY_PATH, ACE_ROOT, …), and the
-# host's proxy variables unset (fallback for --http-proxy=false; podman build
-# still passes them to the RUN steps, so dnf/pip may use them).
+# the base made it fish (kide). Its and root's ~/.bashrc and fish config get the
+# loader line, once each (fish's too: fish may come from a layer above or below).
 # /workspace is the WORKDIR, a plain directory owned by KIDE_USER: the mount
 # point for the host's ~/workspace (podman run -v "$HOME/workspace:/workspace:Z").
 ARG KIDE_USER
@@ -125,15 +136,16 @@ RUN set -e; \
     case $(getent passwd "$KIDE_USER" | cut -d: -f7) in */fish) ;; *) usermod -s /bin/bash "$KIDE_USER" ;; esac; \
     home=$(getent passwd "$KIDE_USER" | cut -d: -f6); \
     group=$(id -g "$KIDE_USER"); \
-    for rc in "$home/.bashrc" /root/.bashrc; do \
-      for line in 'PATH="$HOME/.local/bin:$PATH"' \
-          '[ -f "$IBN_DIST_PREFIX/bin/ibn-dist-env.sh" ] && . "$IBN_DIST_PREFIX/bin/ibn-dist-env.sh"' \
-          'unset http_proxy https_proxy ftp_proxy all_proxy no_proxy HTTP_PROXY HTTPS_PROXY FTP_PROXY ALL_PROXY NO_PROXY'; do \
-        grep -qxF -- "$line" "$rc" 2>/dev/null || printf '%s\n' "$line" >>"$rc"; \
-      done; \
+    for h in "$home" /root; do \
+      mkdir -p "$h/.config/fish"; \
+      line='. /usr/local/share/container-shell/load.sh'; \
+      grep -qxF -- "$line" "$h/.bashrc" 2>/dev/null || printf '%s\n' "$line" >>"$h/.bashrc"; \
+      line='source /usr/local/share/container-shell/load.fish'; \
+      grep -qxF -- "$line" "$h/.config/fish/config.fish" 2>/dev/null || printf '%s\n' "$line" >>"$h/.config/fish/config.fish"; \
     done; \
     mkdir -p /workspace; \
-    chown "$KIDE_USER:$group" "$home" "$home/.bashrc" /workspace
+    chown "$KIDE_USER:$group" "$home" "$home/.bashrc" /workspace; \
+    chown -R "$KIDE_USER:$group" "$home/.config"
 USER $KIDE_USER
 # as KIDE_USER: the newest pip and uv for Python 3.12 into its ~/.local
 # (pip install --user, with /etc/pip.conf: company repo, trusted via pip-server.crt);
