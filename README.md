@@ -5,8 +5,8 @@ image: the RHEL toolchain and libraries, plus the C/C++ libraries dnf does not
 have (CMake 4, onnxruntime, ACE+TAO, OpenDDS, GDAL with GTiff and its PROJ
 and GEOS), built
 **offline from source** out of the upstream release tarballs in `dist/`. Your
-projects are built in the container, installed to the mounted `~/workspace`,
-and run on the host against those libraries.
+projects are built in the container, installed to the mounted
+`~/workspace/opt`, and run on the host against those libraries.
 
 The terminal IDE kide is a separate repo (`kreatos/kide`); its image can be
 built on top of this one (see [kide on top](#kide-on-top)).
@@ -142,7 +142,7 @@ its installed `share/cmake/OpenDDS/config.cmake`, so the package resolves to
 `ibn-dist-env.fish` (fish). Sourced, they set the environment for building
 against the libraries and running what links them: `PREFIX/bin` first on
 `PATH`, `CMAKE_PREFIX_PATH=PREFIX`, `PKG_CONFIG_PATH`,
-`CPLUS_INCLUDE_PATH=PREFIX/include`, `LIBRARY_PATH` and `LD_LIBRARY_PATH`
+`CPLUS_INCLUDE_PATH=PREFIX/include:PREFIX/include/onnxruntime` (so `#include <onnxruntime_cxx_api.h>` also works without onnxruntime's CMake target), `LIBRARY_PATH` and `LD_LIBRARY_PATH`
 (`PREFIX/lib`, `lib64`), `ACE_ROOT`, `TAO_ROOT`, `DDS_ROOT`
 (`PREFIX/share/{ace,tao,dds}`, for `opendds_idl` or MPC by hand), and
 `GDAL_DATA=PREFIX/share/gdal` (GDAL's compiled-in data path is the `PREFIX`
@@ -163,15 +163,50 @@ the mount at run time, too late for `ldconfig`).
 
 ### Your projects: built in the container, run on the host
 
-Build and install them to `/workspace` (`cmake --install build --prefix
-/workspace`: `bin/`, `lib/` next to `ibn-dist/`); the host then runs them
-against those libraries. Two conditions:
+They install to `IBN_OPT_PREFIX=/workspace/opt` (host: `~/workspace/opt`),
+next to `ibn-dist/`. The image sets `CMAKE_INSTALL_PREFIX=/workspace/opt`, which
+CMake (>= 3.29) takes as the default install prefix, so a plain
+
+    cmake -B build && cmake --build build && cmake --install build
+
+installs to `/workspace/opt/{bin,lib64,include,…}`. The explicit form,
+`cmake -B build -DCMAKE_INSTALL_PREFIX="${IBN_OPT_PREFIX:?not set}"`, is the
+same, and also fixes a build dir configured earlier: the prefix is cached in
+`CMakeCache.txt` at the first configure. Don't set `CMAKE_INSTALL_PREFIX` in
+the CMakeLists or in a preset's `installDir`, because that overrides the
+environment.
+
+Other projects then find what was installed there with no hints. The hooks
+(`10-ibn-dev.{sh,fish}`) add `/workspace/opt` right after the `ibn-dist`
+entries (so it never hides a dist library) and before RHEL's:
+
+| Variable | `/workspace/opt` entries |
+|---|---|
+| `PATH` | `bin` |
+| `CMAKE_PREFIX_PATH` | `/workspace/opt` (`find_package`) |
+| `PKG_CONFIG_PATH` | `lib64/pkgconfig`, `lib/pkgconfig` |
+| `CPLUS_INCLUDE_PATH` | `include` |
+| `LIBRARY_PATH`, `LD_LIBRARY_PATH` | `lib64`, `lib` |
+
+The image's `ENV` also has `PATH`, `PKG_CONFIG_PATH` and `LD_LIBRARY_PATH` with
+them, for programs not started from a shell. For `find_package(foo)`, a library
+installs a CMake package (`install(TARGETS foo EXPORT fooTargets …)`,
+`install(EXPORT fooTargets NAMESPACE foo:: DESTINATION
+${CMAKE_INSTALL_LIBDIR}/cmake/foo)` and a `fooConfig.cmake` from
+`configure_package_config_file`). Install destinations should be relative
+(`GNUInstallDirs`: on RHEL `CMAKE_INSTALL_LIBDIR` is `lib64`). Public headers
+go under `include/foo/` and are included as `<foo/bar.h>`, so two projects'
+headers cannot collide; install them with
+`install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})`, and the
+include directory stays `include`.
+
+The host then runs them against the dist libraries. Two conditions:
 
 - **The host must find the libraries.** On the host they are in
   `~/workspace/ibn-dist/lib` and `lib64`, not `/workspace/…`, so link your
   programs with an RPATH relative to the binary:
 
-      set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../ibn-dist/lib;$ORIGIN/../ibn-dist/lib64")
+      set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib64;$ORIGIN/../lib;$ORIGIN/../../ibn-dist/lib64;$ORIGIN/../../ibn-dist/lib")
 
   ACE, TAO, OpenDDS and GDAL are already built this way (within `ibn-dist`).
   The alternative is sourcing `ibn-dist-env.sh` on the host, which sets

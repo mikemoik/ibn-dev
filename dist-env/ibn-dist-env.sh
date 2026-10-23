@@ -25,7 +25,10 @@ _ibn_dist_prepend CMAKE_PREFIX_PATH "$IBN_DIST_PREFIX"
 # pkg-config: ACE, TAO, TAO_* (lib), libonnxruntime and gdal (lib64)
 _ibn_dist_prepend PKG_CONFIG_PATH "$IBN_DIST_PREFIX/lib64/pkgconfig"
 _ibn_dist_prepend PKG_CONFIG_PATH "$IBN_DIST_PREFIX/lib/pkgconfig"
-# the compiler and linker without -I/-L: #include <ace/...>, -lACE -lTAO ...
+# the compiler and linker without -I/-L: #include <ace/...>, -lACE -lTAO ...;
+# include/onnxruntime for #include <onnxruntime_cxx_api.h> (as its CMake
+# target and libonnxruntime.pc give it)
+_ibn_dist_prepend CPLUS_INCLUDE_PATH "$IBN_DIST_PREFIX/include/onnxruntime"
 _ibn_dist_prepend CPLUS_INCLUDE_PATH "$IBN_DIST_PREFIX/include"
 _ibn_dist_prepend LIBRARY_PATH "$IBN_DIST_PREFIX/lib64"
 _ibn_dist_prepend LIBRARY_PATH "$IBN_DIST_PREFIX/lib"

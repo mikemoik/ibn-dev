@@ -102,10 +102,15 @@ RUN ln -sf /opt/ibn-dev/dist/build-dist.sh /usr/local/bin/build-dist.sh
 # binaries built without an RPATH; not ld.so.conf.d: the libraries only appear
 # at run time in the mount, after ldconfig could run) are set here as well,
 # for programs not started from a shell.
+# IBN_OPT_PREFIX: where your prod projects install (CMAKE_INSTALL_PREFIX is
+# cmake's default install prefix, CMake >= 3.29), searched after ibn-dist; the
+# hooks add the build variables (CMAKE_PREFIX_PATH, CPLUS_INCLUDE_PATH, …).
 ENV IBN_DIST_PREFIX=/workspace/ibn-dist \
-    PATH=/workspace/ibn-dist/bin:$PATH \
-    PKG_CONFIG_PATH=/workspace/ibn-dist/lib/pkgconfig:/workspace/ibn-dist/lib64/pkgconfig \
-    LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64
+    IBN_OPT_PREFIX=/workspace/opt \
+    CMAKE_INSTALL_PREFIX=/workspace/opt \
+    PATH=/workspace/ibn-dist/bin:/workspace/opt/bin:$PATH \
+    PKG_CONFIG_PATH=/workspace/ibn-dist/lib/pkgconfig:/workspace/ibn-dist/lib64/pkgconfig:/workspace/opt/lib64/pkgconfig:/workspace/opt/lib/pkgconfig \
+    LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64:/workspace/opt/lib64:/workspace/opt/lib
 # The shells' config is in hooks: container-shell/load.{sh,fish}, sourced from
 # ~/.bashrc and ~/.config/fish/config.fish, place every hook the image layers
 # ship in /usr/local/share/container-shell/{bash,fish}/ in the mounted
