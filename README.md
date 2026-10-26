@@ -19,6 +19,7 @@ built on top of this one (see [kide on top](#kide-on-top)).
 | `dist/`, `manifest/dist.tsv` | upstream release tarballs kept as shipped, pinned + sha256-checked |
 | `dist-env/` | `ibn-dist-env.sh`/`.fish`, installed by `build-dist.sh` |
 | `container-shell/` | the shells' hooks: loader, `10-ibn-dev.sh`/`.fish` ([Shell hooks](#shell-hooks-workspacecontainer)) |
+| `3party/` | superbuild installing the 3rd-party packages a prod repo ships ([3party/](#3rd-party-packages-your-repos-ship-3party)) |
 | `devcontainer/` | `ibn-devcontainer`: the image as a VS Code dev container |
 | `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end) |
 | `scripts/dist-update.sh` | the only step that downloads: refreshes `dist/` and `VERSIONS` |
@@ -220,6 +221,43 @@ The host then runs them against the dist libraries. Two conditions:
 Gotcha: `onnxruntime_c_api.h` defines a macro `NO_EXCEPTION`, which breaks
 TAO's `CORBA::exception_type` enum (`tao/Exception.h`). Keep onnxruntime and
 TAO/OpenDDS headers in separate `.cpp` files (as `test/devlibs` does).
+
+### 3rd-party packages your repos ship: 3party/
+
+A prod repo that ships 3rd-party packages installs them to `/workspace/opt`
+first; the project's own build then finds them with `find_package` like every
+other library, and the host finds them at run time through the RPATH.
+`3party/CMakeLists.txt` is a superbuild (`ExternalProject`, plain CMake, so it
+works under Visual Studio too) for the two kinds of packages:
+
+- **with a CMakeLists of their own** (sqlite): configured, built and installed
+  with `CMAKE_INSTALL_PREFIX` and `CMAKE_INSTALL_RPATH=$ORIGIN`. Its CMakeLists
+  needs `install()` rules, otherwise the install step fails with
+  `No rule to make target 'install'`.
+- **header-only, already in installed layout** (eigen, gcem): every top-level
+  directory they ship is copied unchanged into the prefix (eigen: `include/`
+  and `share/`, its config is in `share/eigen3/cmake/`; gcem: `include/` and
+  `lib/`). Their `*Targets.cmake` are prefix-relative, so they survive the
+  copy; a shipped `*.pc` with an absolute `prefix=` line needs fixing.
+
+Run it before the project's build, as its own configure (the project's
+`find_package` runs at configure time, before anything could be built):
+
+    cmake -S 3party -B build-3party
+    cmake --build build-3party           # installs: no cmake --install
+
+`THIRDPARTY_DIR` is the directory with `sqlite/`, `eigen/` and `gcem/`
+(default: the directory of the CMakeLists, when it is copied into the prod
+repo). Run from ibn-dev, pass the prod repo's directory, as an absolute path:
+`-DTHIRDPARTY_DIR=$PWD/3rdparty`. The directories to copy are read at
+configure time, so after a change in the shipped trees configure a fresh
+build dir. The prefix is `CMAKE_INSTALL_PREFIX` from the environment; under
+Visual Studio pass it explicitly (`-DCMAKE_INSTALL_PREFIX=C:/…/opt`), build with
+`--config Release` and add it to the project's `CMAKE_PREFIX_PATH`.
+
+The project then uses `find_package(SQLite3)` (CMake's `FindSQLite3`, target
+`SQLite::SQLite3`; `/workspace/opt` is searched before RHEL's `sqlite-libs`),
+`find_package(Eigen3 CONFIG)` (`Eigen3::Eigen`) and `find_package(gcem CONFIG)`.
 
 ### Another base image
 
