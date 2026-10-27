@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+# one find_dependency per dependency in projTargets.cmake: Eigen3 is public;
+# SQLiteCpp is private, but appears there as $<LINK_ONLY:SQLiteCpp> when foo
+# is built static, so it is looked up as well
+include(CMakeFindDependencyMacro)
+find_dependency(Eigen3 CONFIG)
+find_dependency(SQLiteCpp CONFIG)
+
+include("${CMAKE_CURRENT_LIST_DIR}/projTargets.cmake")
+check_required_components(proj)
