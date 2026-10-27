@@ -1,11 +1,26 @@
+# Template for projConfig.cmake, the file find_package(proj) loads in the
+# consumer's build. configure_package_config_file in ../CMakeLists.txt turns
+# it into the real file.
+
+# Replaced by generated code: computes the install prefix from this file's
+# location (so the package can be moved) and defines set_and_check and
+# check_required_components
 @PACKAGE_INIT@
 
-# one find_dependency per dependency in projTargets.cmake: Eigen3 is public;
+# Provides find_dependency: like find_package, but passes the consumer's
+# QUIET/REQUIRED on and reports a missing dependency as "proj not found"
+include(CMakeFindDependencyMacro)
+# One find_dependency per dependency in projTargets.cmake, before including
+# it, so the targets proj::foo refers to (Eigen3::Eigen, SQLiteCpp) exist.
+# Eigen3 is public: consumers compile against Eigen's headers
+find_dependency(Eigen3 CONFIG)
 # SQLiteCpp is private, but appears there as $<LINK_ONLY:SQLiteCpp> when foo
 # is built static, so it is looked up as well
-include(CMakeFindDependencyMacro)
-find_dependency(Eigen3 CONFIG)
 find_dependency(SQLiteCpp CONFIG)
 
+# Load the targets file installed by install(EXPORT): defines proj::foo.
+# CMAKE_CURRENT_LIST_DIR: the directory of this file
 include("${CMAKE_CURRENT_LIST_DIR}/projTargets.cmake")
+# Fails find_package(proj COMPONENTS …) for components this package does not
+# have (it has none); a standard last line of a package config
 check_required_components(proj)
