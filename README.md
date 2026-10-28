@@ -21,6 +21,7 @@ built on top of this one (see [kide on top](#kide-on-top)).
 | `container-shell/` | the shells' hooks: loader, `10-ibn-dev.sh`/`.fish` ([Shell hooks](#shell-hooks-workspacecontainer)) |
 | `3party/` | superbuild installing the 3rd-party packages a prod repo ships ([3party/](#3rd-party-packages-your-repos-ship-3party)) |
 | `cmake-samples/` | sample library `proj` (GNUInstallDirs, package config, `proj::foo`) and a `consumer` of the installed package |
+| `sample-proj/` | sample project split into libraries `libA`, `libB` (uses A), `libC` (uses B): one export set, package `sample` with components, `FILE_SET HEADERS`, `$ORIGIN` RPATH |
 | `devcontainer/` | `ibn-devcontainer`: the image as a VS Code dev container |
 | `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end) |
 | `scripts/dist-update.sh` | the only step that downloads: refreshes `dist/` and `VERSIONS` |
