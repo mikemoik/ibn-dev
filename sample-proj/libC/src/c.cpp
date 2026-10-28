@@ -1,9 +1,9 @@
-#include "sample/c/c.hpp"
+#include "proj/c/c.hpp"
 
-#include "sample/b/b.hpp"
+#include "proj/b/b.hpp"
 
-namespace sample::c {
+namespace proj::c {
 
 std::string report(int x) { return std::to_string(b::plus_answer(x)); }
 
-}  // namespace sample::c
+}  // namespace proj::c

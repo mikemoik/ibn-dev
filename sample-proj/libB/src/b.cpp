@@ -1,7 +1,7 @@
-#include "sample/b/b.hpp"
+#include "proj/b/b.hpp"
 
-namespace sample::b {
+namespace proj::b {
 
 int plus_answer(int x) { return x + a::answer(); }
 
-}  // namespace sample::b
+}  // namespace proj::b
