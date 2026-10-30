@@ -4,7 +4,7 @@ The ibn-dev build environment (`podman/Containerfile.ibn-dev`, see the
 [README](../README.md)) for VS
 Code's Dev Containers extension with podman. VS Code is the editor and bash
 is the shell. `devcontainer/Containerfile` is a thin layer on top of ibn-dev:
-it only adds `~/.vscode-server`, owned by `KIDE_USER`, for the volume below.
+it only adds `~/.vscode-server`, owned by `IBNDEV_USER`, for the volume below.
 
 What is in it, all from ibn-dev:
 
@@ -23,7 +23,7 @@ What is in it, all from ibn-dev:
   `CPLUS_INCLUDE_PATH`, `LIBRARY_PATH`, `ACE_ROOT`/`TAO_ROOT`/`DDS_ROOT`,
   `GDAL_DATA`)
 - pip/uv config and the pip server certificate from `CONF_DIR`, and pip + uv
-  in `KIDE_USER`'s `~/.local`
+  in `IBNDEV_USER`'s `~/.local`
 - `safe.directory = *` for git
 
 No terminal IDE (that is kide, a separate repo), so no Rust or Go build. The
@@ -32,7 +32,7 @@ dist compile (~8–9 min) happens later, in the container (`build-dist.sh`).
 ## Build
 
 From the repo root, with the same `podman/base.conf` as ibn-dev
-(`KIDE_USER`; the other args are not used here). ibn-dev first, if it is not
+(`IBNDEV_USER`; the other args are not used here). ibn-dev first, if it is not
 built yet:
 
     podman build --build-arg-file podman/base.conf -t ibn-dev -f podman/Containerfile.ibn-dev .
@@ -45,7 +45,7 @@ built yet:
 
 1. VS Code setting: `"dev.containers.dockerPath": "podman"`.
 2. Copy `devcontainer/devcontainer.json` to `<project>/.devcontainer/devcontainer.json`.
-   If `podman/base.conf` sets a different `KIDE_USER`/`KIDE_UID`/`KIDE_GID`,
+   If `podman/base.conf` sets a different `IBNDEV_USER`/`IBNDEV_UID`/`IBNDEV_GID`,
    change `default`, `1001`, and the home path in `mounts` to match.
 3. *Dev Containers: Reopen in Container*.
 4. Once per project, in the container's terminal: `build-dist.sh`. This
@@ -61,6 +61,15 @@ What the template sets:
   files written in the project stay yours. Rootless podman only.
   `updateRemoteUserUID: false`: the mapping already does this.
 - `--http-proxy=false`: the host's proxy variables stay out. As a fallback, the shells' hook loader unsets them too.
+- GPU (onnxruntime's CUDA provider): `--device nvidia.com/gpu=all` (CDI,
+  `/etc/cdi/nvidia.yaml` on the host), the host's `/usr/local/cuda-13/lib64`
+  and its cuDNN 9 libraries (`/usr/lib64/libcudnn*.so.9`, RPM
+  `libcudnn9-cuda-13`) mounted read-only under `/opt/host-cuda` and
+  `/opt/host-cudnn`, both on `LD_LIBRARY_PATH` (`containerEnv`: the image's
+  value repeated, plus these two). The container does not start without
+  them: on a host without a GPU, drop the `--device` run arg, the CUDA/cuDNN
+  mounts and `containerEnv`. A cuDNN update that adds a library needs a new
+  mount line.
 - The shell hooks go to `.container/` in the project directory (the mounted
   `/workspace`; see the main README's *Shell hooks*): add it to the
   project's `.gitignore` (your own hooks there are per project).

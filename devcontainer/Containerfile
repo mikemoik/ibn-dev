@@ -1,8 +1,8 @@
 # ibn-devcontainer: the ibn-dev build environment (podman/Containerfile.ibn-dev) as a
 # VS Code dev container, without the terminal IDE: VS Code is the editor, bash
 # the shell. ibn-dev already has everything (RHEL packages, pip/uv,
-# build-dist.sh with dist/, KIDE_USER with bash); this layer
-# only adds ~/.vscode-server, owned by KIDE_USER, so the volume
+# build-dist.sh with dist/, IBNDEV_USER with bash); this layer
+# only adds ~/.vscode-server, owned by IBNDEV_USER, so the volume
 # devcontainer.json mounts there starts out as its own (VS Code's server
 # survives a rebuilt container).
 # Build ibn-dev first, then this, from the repo root:
@@ -15,10 +15,10 @@
 ARG IBN_DEV=localhost/ibn-dev
 FROM $IBN_DEV
 USER root
-ARG KIDE_USER
+ARG IBNDEV_USER
 RUN set -e; \
-    home=$(getent passwd "$KIDE_USER" | cut -d: -f6); \
+    home=$(getent passwd "$IBNDEV_USER" | cut -d: -f6); \
     mkdir -p "$home/.vscode-server"; \
-    chown "$KIDE_USER:$(id -g "$KIDE_USER")" "$home/.vscode-server"
-USER $KIDE_USER
+    chown "$IBNDEV_USER:$(id -g "$IBNDEV_USER")" "$home/.vscode-server"
+USER $IBNDEV_USER
 WORKDIR /workspace

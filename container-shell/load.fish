@@ -1,5 +1,5 @@
 # container-shell/load.fish — the same file in the ibn-dev and kide repos: keep
-# them in step. Sourced from ~/.config/fish/config.fish (KIDE_USER and root):
+# them in step. Sourced from ~/.config/fish/config.fish (IBNDEV_USER and root):
 # places the image's hooks in /workspace/.container/fish/ (sync.sh), then
 # sources every *.fish there in name order — the image's (10-ibn-dev.fish,
 # 20-kide.fish) and your own. /workspace not writable: the image's hooks

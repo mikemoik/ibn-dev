@@ -15,7 +15,7 @@ for sh in bash fish; do
     cp -f "$f" "/workspace/.container/$sh/"
   done
 done
-# a root shell: the files belong to the workspace's owner (KIDE_USER, i.e. you
+# a root shell: the files belong to the workspace's owner (IBNDEV_USER, i.e. you
 # on the host), not to a subuid of root
 [ "$(id -u)" -ne 0 ] || chown -R --reference=/workspace /workspace/.container
 exit 0

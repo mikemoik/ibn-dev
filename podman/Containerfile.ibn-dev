@@ -4,11 +4,11 @@
 # with GTiff). No IDE: the kide repo's podman/Containerfile.kide adds kide on
 # top of any base, this image included (and this file works on top of kide
 # too: every step here may run on a base that already has it). Shared with
-# kide: KIDE_USER/KIDE_UID/KIDE_GID and container-shell/ (the shells' hook
+# kide: IBNDEV_USER/IBNDEV_UID/IBNDEV_GID and container-shell/ (the shells' hook
 # directory /workspace/.container/{bash,fish}; this image's hooks are
 # 10-ibn-dev.{sh,fish}).
 # The base image and its repo setup are not in this file: podman/base.conf
-# (BASE, CONF_DIR, KIDE_USER/KIDE_UID/KIDE_GID, PIP_INDEX_URL).
+# (BASE, CONF_DIR, IBNDEV_USER/IBNDEV_UID/IBNDEV_GID, PIP_INDEX_URL).
 # Build from the repo root:
 #   podman build --build-arg-file podman/base.conf -t ibn-dev -f podman/Containerfile.ibn-dev .
 # The C/C++ libraries are not built into the image: run `build-dist.sh` once
@@ -29,7 +29,7 @@ USER root
 # tooling), clangd/clang-format/clang-tidy, gdb, lldb, git, Python 3.12 with
 # numpy and pybind11, opencv, glew, glfw, gdal-libs, Qt5 + qt5-qtbase-devel (CMake configs), Qt5 Charts
 # (qt5-qtcharts-devel, EPEL: Qt5ChartsConfig.cmake + the library), libtiff. shadow-utils
-# (useradd/usermod) for KIDE_USER below.
+# (useradd/usermod) for IBNDEV_USER below.
 # GDAL itself to build against is not RHEL's (its gdal-libs has no GTiff):
 # build-dist.sh builds PROJ, GEOS and GDAL 3.10.3 into the dist; what that
 # needs from RHEL is here (sqlite, and the -devel packages of sqlite, libcurl,
@@ -124,24 +124,24 @@ ENV IBN_DIST_PREFIX=/workspace/ibn-dist \
 # dnf/pip may use them). container-shell/{sync.sh,load.*} are the same files in
 # the kide repo; whichever layer comes last installs them again, unchanged.
 COPY container-shell /usr/local/share/container-shell
-# KIDE_USER (podman/base.conf): the user the image runs as. Taken from the base
+# IBNDEV_USER (podman/base.conf): the user the image runs as. Taken from the base
 # image if it has it (e.g. "default" in Red Hat's application images, or kide's),
-# otherwise created with KIDE_UID/KIDE_GID. Its login shell becomes bash unless
+# otherwise created with IBNDEV_UID/IBNDEV_GID. Its login shell becomes bash unless
 # the base made it fish (kide). Its and root's ~/.bashrc and fish config get the
 # loader line, once each (fish's too: fish may come from a layer above or below).
-# /workspace is the WORKDIR, a plain directory owned by KIDE_USER: the mount
+# /workspace is the WORKDIR, a plain directory owned by IBNDEV_USER: the mount
 # point for the host's ~/workspace (podman run -v "$HOME/workspace:/workspace:Z").
-ARG KIDE_USER
-ARG KIDE_UID
-ARG KIDE_GID
+ARG IBNDEV_USER
+ARG IBNDEV_UID
+ARG IBNDEV_GID
 RUN set -e; \
-    if ! id -u "$KIDE_USER" >/dev/null 2>&1; then \
-      getent group "$KIDE_GID" >/dev/null || groupadd -g "$KIDE_GID" "$KIDE_USER"; \
-      useradd -m -u "$KIDE_UID" -g "$KIDE_GID" "$KIDE_USER"; \
+    if ! id -u "$IBNDEV_USER" >/dev/null 2>&1; then \
+      getent group "$IBNDEV_GID" >/dev/null || groupadd -g "$IBNDEV_GID" "$IBNDEV_USER"; \
+      useradd -m -u "$IBNDEV_UID" -g "$IBNDEV_GID" "$IBNDEV_USER"; \
     fi; \
-    case $(getent passwd "$KIDE_USER" | cut -d: -f7) in */fish) ;; *) usermod -s /bin/bash "$KIDE_USER" ;; esac; \
-    home=$(getent passwd "$KIDE_USER" | cut -d: -f6); \
-    group=$(id -g "$KIDE_USER"); \
+    case $(getent passwd "$IBNDEV_USER" | cut -d: -f7) in */fish) ;; *) usermod -s /bin/bash "$IBNDEV_USER" ;; esac; \
+    home=$(getent passwd "$IBNDEV_USER" | cut -d: -f6); \
+    group=$(id -g "$IBNDEV_USER"); \
     for h in "$home" /root; do \
       mkdir -p "$h/.config/fish"; \
       line='. /usr/local/share/container-shell/load.sh'; \
@@ -150,10 +150,10 @@ RUN set -e; \
       grep -qxF -- "$line" "$h/.config/fish/config.fish" 2>/dev/null || printf '%s\n' "$line" >>"$h/.config/fish/config.fish"; \
     done; \
     mkdir -p /workspace; \
-    chown "$KIDE_USER:$group" "$home" "$home/.bashrc" /workspace; \
-    chown -R "$KIDE_USER:$group" "$home/.config"
-USER $KIDE_USER
-# as KIDE_USER: the newest pip and uv for Python 3.12 into its ~/.local
+    chown "$IBNDEV_USER:$group" "$home" "$home/.bashrc" /workspace; \
+    chown -R "$IBNDEV_USER:$group" "$home/.config"
+USER $IBNDEV_USER
+# as IBNDEV_USER: the newest pip and uv for Python 3.12 into its ~/.local
 # (pip install --user, with /etc/pip.conf: company repo, trusted via pip-server.crt);
 # root installs nothing with pip. /usr/bin/python3.12, the dnf one: a base
 # image may put a venv's python first on PATH (e.g. /opt/app-root in Red Hat's
