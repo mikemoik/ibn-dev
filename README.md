@@ -23,7 +23,7 @@ built on top of this one (see [kide on top](#kide-on-top)).
 | `cmake-samples/` | sample library `proj` (GNUInstallDirs, package config, `proj::foo`) and a `consumer` of the installed package |
 | `sample-proj/` | sample project split into libraries `libA`, `libB` (uses A), `libC` (uses B): one export set, package `proj` with components, `FILE_SET HEADERS`, `$ORIGIN` RPATH; `consumer/` app using the installed package |
 | `devcontainer/` | `ibn-devcontainer`: the image as a VS Code dev container |
-| `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end) |
+| `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end), `cuda/` (GPU check, [System check](#system-check)) |
 | `scripts/dist-update.sh` | the only step that downloads: refreshes `dist/` and `VERSIONS` |
 | `VERSIONS` | every component with upstream URL and version |
 
@@ -92,7 +92,15 @@ CUDA 13 and cuDNN 9 go in read-only:
     podman run --rm -it --http-proxy=false --userns=keep-id:uid=1001,gid=1001 \
       --device nvidia.com/gpu=all \
       -v /usr/local/cuda-13/lib64:/opt/host-cuda/lib64:ro \
-      $(for f in /usr/lib64/libcudnn*.so*; do printf -- '-v %s:/opt/host-cudnn/%s:ro ' "$f" "${f##*/}"; done) \
+      -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so:ro \
+      -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so.9:ro \
+      -v /usr/lib64/libcudnn_adv.so.9:/opt/host-cudnn/libcudnn_adv.so.9:ro \
+      -v /usr/lib64/libcudnn_cnn.so.9:/opt/host-cudnn/libcudnn_cnn.so.9:ro \
+      -v /usr/lib64/libcudnn_engines_precompiled.so.9:/opt/host-cudnn/libcudnn_engines_precompiled.so.9:ro \
+      -v /usr/lib64/libcudnn_engines_runtime_compiled.so.9:/opt/host-cudnn/libcudnn_engines_runtime_compiled.so.9:ro \
+      -v /usr/lib64/libcudnn_graph.so.9:/opt/host-cudnn/libcudnn_graph.so.9:ro \
+      -v /usr/lib64/libcudnn_heuristic.so.9:/opt/host-cudnn/libcudnn_heuristic.so.9:ro \
+      -v /usr/lib64/libcudnn_ops.so.9:/opt/host-cudnn/libcudnn_ops.so.9:ro \
       -e LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64:/workspace/opt/lib64:/workspace/opt/lib:/opt/host-cuda/lib64:/opt/host-cudnn \
       -v "$HOME/workspace:/workspace:Z" ibn-dev
 
@@ -102,14 +110,19 @@ CUDA 13 and cuDNN 9 go in read-only:
   `nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`).
 - `/usr/local/cuda-13`: the active CUDA 13.x (alternatives link); the CUDA
   provider needs `libcudart`, `libcublas`, `libcublasLt`, `libcurand`.
-- cuDNN 9 from the host's `libcudnn9-cuda-13` RPMs; the provider loads it as
-  `libcudnn.so` (from `libcudnn9-devel`).
+- cuDNN 9 from the host's `libcudnn9-cuda-13` RPMs, one file per library
+  (`rpm -ql libcudnn9-cuda-13 | grep '\.so\.9'`; a missing file stops the
+  start, a cuDNN update that adds one needs a new line). The provider loads
+  it as `libcudnn.so`, hence `libcudnn.so.9` mounted under that name too.
 - `LD_LIBRARY_PATH`: the image's value (`ENV` in
   `podman/Containerfile.ibn-dev`) plus the two host dirs; `-e` replaces it,
   so the image's part is repeated.
 - On the host itself, outside the container, the same libraries come from
   the system: nothing to mount.
 - The dev container template (`devcontainer/devcontainer.json`) does the same.
+- Check: `test/cuda/ort_cuda_check.cpp` runs a one-node model on the GPU
+  (CPU fallback off) and loads cuDNN; the command is in
+  [System check](#system-check).
 
 ### Shell hooks: /workspace/.container
 
@@ -499,4 +512,25 @@ ldconfig -p | grep onnxruntime
 find / /home /opt /usr/local /usr -xdev \( -name 'onnxruntimeConfig.cmake' -o -name 'onnxruntime_cxx_api.h' -o -name 'libonnxruntime.pc' \
   -o -name 'libonnxruntime.so*' -o -name 'libonnxruntime_providers_cuda.so' \) 2>/dev/null | sort -u
 pip list 2>/dev/null | grep -iE 'onnx|nvidia'
+# onnxruntime's CUDA build in the dist (after build-dist.sh): version + the CUDA provider
+grep ^Version ~/workspace/ibn-dist/lib64/pkgconfig/libonnxruntime.pc
+ls -l ~/workspace/ibn-dist/lib64/libonnxruntime_providers_cuda.so
+# CUDA + cuDNN in the ibn-dev container (from the repo root; needs the image
+# and the dist with onnxruntime's CUDA build: build-dist.sh); prints CUDA OK + cuDNN OK
+podman run --rm --http-proxy=false --userns=keep-id:uid=1001,gid=1001 \
+  --device nvidia.com/gpu=all \
+  -v /usr/local/cuda-13/lib64:/opt/host-cuda/lib64:ro \
+  -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so:ro \
+  -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so.9:ro \
+  -v /usr/lib64/libcudnn_adv.so.9:/opt/host-cudnn/libcudnn_adv.so.9:ro \
+  -v /usr/lib64/libcudnn_cnn.so.9:/opt/host-cudnn/libcudnn_cnn.so.9:ro \
+  -v /usr/lib64/libcudnn_engines_precompiled.so.9:/opt/host-cudnn/libcudnn_engines_precompiled.so.9:ro \
+  -v /usr/lib64/libcudnn_engines_runtime_compiled.so.9:/opt/host-cudnn/libcudnn_engines_runtime_compiled.so.9:ro \
+  -v /usr/lib64/libcudnn_graph.so.9:/opt/host-cudnn/libcudnn_graph.so.9:ro \
+  -v /usr/lib64/libcudnn_heuristic.so.9:/opt/host-cudnn/libcudnn_heuristic.so.9:ro \
+  -v /usr/lib64/libcudnn_ops.so.9:/opt/host-cudnn/libcudnn_ops.so.9:ro \
+  -e LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64:/workspace/opt/lib64:/workspace/opt/lib:/opt/host-cuda/lib64:/opt/host-cudnn \
+  -v "$PWD/test/cuda:/check:ro,Z" -v "$HOME/workspace:/workspace:Z" ibn-dev \
+  bash -c '. /workspace/ibn-dist/bin/ibn-dist-env.sh &&
+    g++ -std=c++17 /check/ort_cuda_check.cpp -lonnxruntime -ldl -o /tmp/ort_cuda_check && /tmp/ort_cuda_check'
 ```
