@@ -442,3 +442,25 @@ Everything in `dist/`, with the pinned upstream version and its license.
 | dist/opendds | <https://github.com/OpenDDS/OpenDDS/releases/download/v3.34.0/OpenDDS-3.34.0.tar.gz> | `3.34.0 (source)` | LicenseRef-OpenDDS (`LICENSE`: permissive OCI license, no SPDX id) |
 | dist/proj | <https://github.com/OSGeo/PROJ/releases/download/9.6.0/proj-9.6.0.tar.gz> | `9.6.0 (source)` | MIT (`COPYING`) |
 | dist/rapidjson | <https://github.com/Tencent/rapidjson/archive/fd3dc29a5c2852df569e1ea81dbde2c412ac5051.tar.gz> | `fd3dc29a5c28` | MIT (`license.txt`; `bin/jsonchecker` is under the JSON license, not used) |
+
+## System check
+
+Run on the prod host, paste the output back.
+
+```bash
+# NVIDIA driver, GPU
+nvidia-smi --query-gpu=name,driver_version --format=csv
+# CUDA, cuDNN
+rpm -qa | grep -E '^cuda-(cudart|toolkit|runtime)|^libcudnn' | sort
+ls -d /usr/local/cuda*
+ldconfig -p | grep -E 'libcudart|libcublas\.|libcudnn\.'
+rpm -ql libcudnn9-cuda-13 | grep '\.so\.9'
+# CDI spec, GPU in the container
+ls -l /etc/cdi/nvidia.yaml
+podman run --rm --device nvidia.com/gpu=all ibn-dev nvidia-smi -L
+# onnxruntime
+rpm -qa | grep -i onnx
+ldconfig -p | grep onnxruntime
+find / \( -name 'onnxruntimeConfig.cmake' -o -name 'onnxruntime_cxx_api.h' -o -name 'libonnxruntime.pc' \
+  -o -name 'libonnxruntime.so*' -o -name 'libonnxruntime_providers_cuda.so' \) 2>/dev/null
+```
