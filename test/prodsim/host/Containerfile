@@ -17,15 +17,15 @@ COPY $CONF_DIR/repos.sh /tmp/repos.sh
 RUN /tmp/repos.sh && dnf -y install gdal-libs glfw glew libglvnd-glx libglvnd-opengl mesa-dri-drivers \
         xorg-x11-server-Xvfb procps-ng shadow-utils \
     && dnf clean all
-ARG KIDE_USER
-ARG KIDE_UID
-ARG KIDE_GID
+ARG IBNDEV_USER
+ARG IBNDEV_UID
+ARG IBNDEV_GID
 RUN set -e; \
-    if ! id -u "$KIDE_USER" >/dev/null 2>&1; then \
-      getent group "$KIDE_GID" >/dev/null || groupadd -g "$KIDE_GID" "$KIDE_USER"; \
-      useradd -m -u "$KIDE_UID" -g "$KIDE_GID" "$KIDE_USER"; \
+    if ! id -u "$IBNDEV_USER" >/dev/null 2>&1; then \
+      getent group "$IBNDEV_GID" >/dev/null || groupadd -g "$IBNDEV_GID" "$IBNDEV_USER"; \
+      useradd -m -u "$IBNDEV_UID" -g "$IBNDEV_GID" "$IBNDEV_USER"; \
     fi; \
-    mkdir -p /workspace && chown "$KIDE_UID:$KIDE_GID" /workspace
-USER $KIDE_USER
+    mkdir -p /workspace && chown "$IBNDEV_UID:$IBNDEV_GID" /workspace
+USER $IBNDEV_USER
 WORKDIR /workspace
 CMD ["bash"]

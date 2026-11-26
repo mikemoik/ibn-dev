@@ -22,8 +22,8 @@ WS=${PRODSIM_WORKSPACE:-$HOME/.cache/prodsim-workspace}
 SHOW=0
 [ "${1:-}" = --show ] && SHOW=1
 
-uid=$(sed -n 's/^KIDE_UID=//p' "$ROOT/podman/base.conf")
-gid=$(sed -n 's/^KIDE_GID=//p' "$ROOT/podman/base.conf")
+uid=$(sed -n 's/^IBNDEV_UID=//p' "$ROOT/podman/base.conf")
+gid=$(sed -n 's/^IBNDEV_GID=//p' "$ROOT/podman/base.conf")
 mkdir -p "$WS"
 run=(podman run --rm --http-proxy=false --userns="keep-id:uid=$uid,gid=$gid" -v "$WS:/workspace:Z")
 

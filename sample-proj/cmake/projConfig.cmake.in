@@ -1,0 +1,27 @@
+# Template for projConfig.cmake, loaded by find_package(proj) in the
+# consumer's build. Turned into the real file by ../CMakeLists.txt.
+
+# Generated code: install prefix from this file's location, set_and_check,
+# check_required_components
+@PACKAGE_INIT@
+
+# No find_dependency here: the libraries have no external dependencies. With
+# one (e.g. libA linking Eigen3::Eigen PUBLIC) add, before the include below:
+#   include(CMakeFindDependencyMacro)
+#   find_dependency(Eigen3 CONFIG)
+
+# Load the targets file: defines proj::A, proj::B and (if built) proj::C
+include("${CMAKE_CURRENT_LIST_DIR}/projTargets.cmake")
+
+# A component counts as found when its target exists. Without a COMPONENTS
+# list, proj_FIND_COMPONENTS is empty and the loop does nothing
+foreach(comp IN LISTS proj_FIND_COMPONENTS)
+  if(TARGET proj::${comp})
+    set(proj_${comp}_FOUND TRUE)
+  else()
+    set(proj_${comp}_FOUND FALSE)
+  endif()
+endforeach()
+# Fails find_package(proj COMPONENTS …) if a requested component is missing,
+# e.g. COMPONENTS C from an install built with -DPROJ_BUILD_LIBC=OFF
+check_required_components(proj)

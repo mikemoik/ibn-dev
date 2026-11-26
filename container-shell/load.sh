@@ -1,5 +1,5 @@
 # container-shell/load.sh — the same file in the ibn-dev and kide repos: keep
-# them in step. Sourced from ~/.bashrc (KIDE_USER and root): places the
+# them in step. Sourced from ~/.bashrc (IBNDEV_USER and root): places the
 # image's hooks in /workspace/.container/bash/ (sync.sh), then sources every
 # *.sh there in name order — the image's (10-ibn-dev.sh, 20-kide.sh) and your
 # own. /workspace not writable: the image's hooks straight from the image.

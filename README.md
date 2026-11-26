@@ -19,8 +19,11 @@ built on top of this one (see [kide on top](#kide-on-top)).
 | `dist/`, `manifest/dist.tsv` | upstream release tarballs kept as shipped, pinned + sha256-checked |
 | `dist-env/` | `ibn-dist-env.sh`/`.fish`, installed by `build-dist.sh` |
 | `container-shell/` | the shells' hooks: loader, `10-ibn-dev.sh`/`.fish` ([Shell hooks](#shell-hooks-workspacecontainer)) |
+| `3party/` | superbuild installing the 3rd-party packages a prod repo ships ([3party/](#3rd-party-packages-your-repos-ship-3party)) |
+| `cmake-samples/` | sample library `proj` (GNUInstallDirs, package config, `proj::foo`) and a `consumer` of the installed package |
+| `sample-proj/` | sample project split into libraries `libA`, `libB` (uses A), `libC` (uses B): one export set, package `proj` with components, `FILE_SET HEADERS`, `$ORIGIN` RPATH; `consumer/` app using the installed package |
 | `devcontainer/` | `ibn-devcontainer`: the image as a VS Code dev container |
-| `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end) |
+| `test/` | `run.sh` (offline UBI9 build), `prodsim/` (the workflow end to end), `cuda/` (GPU check, [System check](#system-check)) |
 | `scripts/dist-update.sh` | the only step that downloads: refreshes `dist/` and `VERSIONS` |
 | `VERSIONS` | every component with upstream URL and version |
 
@@ -40,7 +43,7 @@ gdal-libs, protobuf for opencv, GL libraries for glew/glfw):
 - `build-dist.sh` with `dist/` in `/opt/ibn-dev/dist` (`build-dist.sh` on
   `PATH`), not the built libraries ([Libraries](#libraries-built-into-workspaceibn-dist))
 - pip (newest) and uv for Python 3.12, pip-installed by the image's user
-  (`KIDE_USER`) into its `~/.local`; root installs nothing with pip, it only
+  (`IBNDEV_USER`) into its `~/.local`; root installs nothing with pip, it only
   sets up their config and certificate system-wide
 - `safe.directory = *` for git; bash is the shell
 
@@ -55,7 +58,7 @@ dnf:
 Straight from the GitLab (podman clones the repo itself; public project
 only; the arg file is local, so its values are given directly):
 
-    podman build --build-arg BASE=docker.io/rockylinux/rockylinux:9 --build-arg CONF_DIR=podman/conf --build-arg KIDE_USER=default --build-arg KIDE_UID=1001 --build-arg KIDE_GID=1001 --build-arg PIP_INDEX_URL=https://pypi.org/simple -t ibn-dev -f podman/Containerfile.ibn-dev https://gitlab.com/kreatos/ibn-dev.git
+    podman build --build-arg BASE=docker.io/rockylinux/rockylinux:9 --build-arg CONF_DIR=podman/conf --build-arg IBNDEV_USER=default --build-arg IBNDEV_UID=1001 --build-arg IBNDEV_GID=1001 --build-arg PIP_INDEX_URL=https://pypi.org/simple -t ibn-dev -f podman/Containerfile.ibn-dev https://gitlab.com/kreatos/ibn-dev.git
 
 The `dnf install` steps need the base's repos (Rocky + CRB + EPEL by
 default) and the `pip install` step the pip repo, so the build needs internet
@@ -69,7 +72,7 @@ over (`podman save -o ibn-dev.tar ibn-dev`, then `podman load -i ibn-dev.tar`).
 - `-v "$HOME/workspace:/workspace:Z"`: your `~/workspace` (create it once:
   `mkdir -p ~/workspace`) on `/workspace`, the container's working directory.
   `:Z` relabels it for SELinux (needed on RHEL).
-- `--userns=keep-id:uid=1001,gid=1001`: the container runs as `KIDE_USER`
+- `--userns=keep-id:uid=1001,gid=1001`: the container runs as `IBNDEV_USER`
   (`default`, uid/gid 1001, `podman/base.conf`), not root. With rootless
   podman (your normal user, not `sudo podman`) this maps your host user to
   it, so the files it writes stay yours (podman 4.3+).
@@ -79,6 +82,47 @@ over (`podman save -o ibn-dev.tar ibn-dev`, then `podman load -i ibn-dev.tar`).
 - Root inside for a one-off (e.g. `dnf install` to try a package): add
   `--user root` and leave out `--userns=…`. Not kept: the next container
   starts from the image again.
+
+#### GPU (CUDA inference)
+
+The image has no CUDA. onnxruntime (CUDA 13 build) runs on the CPU without
+it; for the CUDA provider (`AppendExecutionProvider_CUDA`) the host's GPU,
+CUDA 13 and cuDNN 9 go in read-only:
+
+    podman run --rm -it --http-proxy=false --userns=keep-id:uid=1001,gid=1001 \
+      --device nvidia.com/gpu=all \
+      -v /usr/local/cuda-13/lib64:/opt/host-cuda/lib64:ro \
+      -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so:ro \
+      -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so.9:ro \
+      -v /usr/lib64/libcudnn_adv.so.9:/opt/host-cudnn/libcudnn_adv.so.9:ro \
+      -v /usr/lib64/libcudnn_cnn.so.9:/opt/host-cudnn/libcudnn_cnn.so.9:ro \
+      -v /usr/lib64/libcudnn_engines_precompiled.so.9:/opt/host-cudnn/libcudnn_engines_precompiled.so.9:ro \
+      -v /usr/lib64/libcudnn_engines_runtime_compiled.so.9:/opt/host-cudnn/libcudnn_engines_runtime_compiled.so.9:ro \
+      -v /usr/lib64/libcudnn_graph.so.9:/opt/host-cudnn/libcudnn_graph.so.9:ro \
+      -v /usr/lib64/libcudnn_heuristic.so.9:/opt/host-cudnn/libcudnn_heuristic.so.9:ro \
+      -v /usr/lib64/libcudnn_ops.so.9:/opt/host-cudnn/libcudnn_ops.so.9:ro \
+      -e LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64:/workspace/opt/lib64:/workspace/opt/lib:/opt/host-cuda/lib64:/opt/host-cudnn \
+      -v "$HOME/workspace:/workspace:Z" ibn-dev
+
+- `--device nvidia.com/gpu=all`: GPU + driver libraries (`libcuda.so.1`)
+  via CDI; needs nvidia-container-toolkit and `/etc/cdi/nvidia.yaml` on the
+  host (regenerate after a driver update:
+  `nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`).
+- `/usr/local/cuda-13`: the active CUDA 13.x (alternatives link); the CUDA
+  provider needs `libcudart`, `libcublas`, `libcublasLt`, `libcurand`.
+- cuDNN 9 from the host's `libcudnn9-cuda-13` RPMs, one file per library
+  (`rpm -ql libcudnn9-cuda-13 | grep '\.so\.9'`; a missing file stops the
+  start, a cuDNN update that adds one needs a new line). The provider loads
+  it as `libcudnn.so`, hence `libcudnn.so.9` mounted under that name too.
+- `LD_LIBRARY_PATH`: the image's value (`ENV` in
+  `podman/Containerfile.ibn-dev`) plus the two host dirs; `-e` replaces it,
+  so the image's part is repeated.
+- On the host itself, outside the container, the same libraries come from
+  the system: nothing to mount.
+- The dev container template (`devcontainer/devcontainer.json`) does the same.
+- Check: `test/cuda/ort_cuda_check.cpp` runs a one-node model on the GPU
+  (CPU fallback off) and loads cuDNN; the command is in
+  [System check](#system-check).
 
 ### Shell hooks: /workspace/.container
 
@@ -116,7 +160,7 @@ after an image update that changes `dist/`.
 | What | From | In `PREFIX` |
 |---|---|---|
 | CMake 4.4.4 | upstream's prebuilt Linux x86_64 tarball | `bin/cmake`, `ctest`, `cpack`: first on `PATH`, ahead of RHEL's cmake 3.31 |
-| onnxruntime 1.30.0 (CPU) | upstream's prebuilt Linux x64 tarball | `include/onnxruntime`, `lib64`; `find_package(onnxruntime)` → `onnxruntime::onnxruntime`, `pkg-config libonnxruntime` |
+| onnxruntime 1.30.0 (CUDA 13) | upstream's prebuilt Linux x64 GPU tarball (`gpu_cuda13`) | `include/onnxruntime`, `lib64`; `find_package(onnxruntime)` → `onnxruntime::onnxruntime`, `pkg-config libonnxruntime`; CUDA provider in `lib64/libonnxruntime_providers_cuda.so` |
 | ACE 8.0.8 + TAO 4.0.8 | source, compiled by `build-dist.sh` | `lib/libACE*`, `libTAO*`, `include/{ace,tao,orbsvcs}`, `bin/tao_idl`; TAO_IDL's headers in `share/tao/TAO_IDL/{include,be_include}` |
 | OpenDDS 3.34.0 (+ RapidJSON headers) | source, compiled by `build-dist.sh` with OpenDDS's `configure` | `lib/libOpenDDS_*`, `include/dds`, `bin/opendds_idl`; `find_package(OpenDDS)` with `opendds_target_sources()` |
 | PROJ 9.6.0, GEOS 3.13.1 | source, compiled by `build-dist.sh` with CMake | `lib64/libproj.so.25`, `libgeos_c.so.1`, `include/proj*.h`, `geos*.h`, `bin/projinfo` etc., `share/proj` (`proj.db`); `find_package(PROJ)`, `find_package(GEOS)` |
@@ -221,6 +265,43 @@ Gotcha: `onnxruntime_c_api.h` defines a macro `NO_EXCEPTION`, which breaks
 TAO's `CORBA::exception_type` enum (`tao/Exception.h`). Keep onnxruntime and
 TAO/OpenDDS headers in separate `.cpp` files (as `test/devlibs` does).
 
+### 3rd-party packages your repos ship: 3party/
+
+A prod repo that ships 3rd-party packages installs them to `/workspace/opt`
+first; the project's own build then finds them with `find_package` like every
+other library, and the host finds them at run time through the RPATH.
+`3party/CMakeLists.txt` is a superbuild (`ExternalProject`, plain CMake, so it
+works under Visual Studio too) for the two kinds of packages:
+
+- **with a CMakeLists of their own** (sqlite): configured, built and installed
+  with `CMAKE_INSTALL_PREFIX` and `CMAKE_INSTALL_RPATH=$ORIGIN`. Its CMakeLists
+  needs `install()` rules, otherwise the install step fails with
+  `No rule to make target 'install'`.
+- **header-only, already in installed layout** (eigen, gcem): every top-level
+  directory they ship is copied unchanged into the prefix (eigen: `include/`
+  and `share/`, its config is in `share/eigen3/cmake/`; gcem: `include/` and
+  `lib/`). Their `*Targets.cmake` are prefix-relative, so they survive the
+  copy; a shipped `*.pc` with an absolute `prefix=` line needs fixing.
+
+Run it before the project's build, as its own configure (the project's
+`find_package` runs at configure time, before anything could be built):
+
+    cmake -S 3party -B build-3party
+    cmake --build build-3party           # installs: no cmake --install
+
+`THIRDPARTY_DIR` is the directory with `sqlite/`, `eigen/` and `gcem/`
+(default: the directory of the CMakeLists, when it is copied into the prod
+repo). Run from ibn-dev, pass the prod repo's directory, as an absolute path:
+`-DTHIRDPARTY_DIR=$PWD/3rdparty`. The directories to copy are read at
+configure time, so after a change in the shipped trees configure a fresh
+build dir. The prefix is `CMAKE_INSTALL_PREFIX` from the environment; under
+Visual Studio pass it explicitly (`-DCMAKE_INSTALL_PREFIX=C:/…/opt`), build with
+`--config Release` and add it to the project's `CMAKE_PREFIX_PATH`.
+
+The project then uses `find_package(SQLite3)` (CMake's `FindSQLite3`, target
+`SQLite::SQLite3`; `/workspace/opt` is searched before RHEL's `sqlite-libs`),
+`find_package(Eigen3 CONFIG)` (`Eigen3::Eigen`) and `find_package(gcem CONFIG)`.
+
 ### Another base image
 
 The Containerfile names no base image and sets up no repos itself;
@@ -255,15 +336,15 @@ for another base (e.g. a company RHEL9 image with its own dnf repos):
 - `PIP_INDEX_URL` (default `https://pypi.org/simple`): the pip package repo.
   `pip.conf` and `uv.toml` are templates; the build replaces
   `@PIP_INDEX_URL@` in both with it (and stops if it is empty). On prod set
-  the company repo here, nothing else changes. Then `KIDE_USER` runs
+  the company repo here, nothing else changes. Then `IBNDEV_USER` runs
   `/usr/bin/python3.12 -m pip install --user --upgrade pip uv` (the dnf
   Python by full path: pip refuses `--user` in a venv, which some base images
   put first on `PATH`).
-- `KIDE_USER`, `KIDE_UID`, `KIDE_GID` (default `default`, 1001, 1001): the
+- `IBNDEV_USER`, `IBNDEV_UID`, `IBNDEV_GID` (default `default`, 1001, 1001): the
   user the image runs as. Every install step runs as root; the last step
-  switches to `KIDE_USER`. A base image that already has that user (e.g.
+  switches to `IBNDEV_USER`. A base image that already has that user (e.g.
   `default` in Red Hat's application images, or kide) keeps it; set
-  `KIDE_UID`/`KIDE_GID` to its uid/gid then (`podman run --rm <base> id
+  `IBNDEV_UID`/`IBNDEV_GID` to its uid/gid then (`podman run --rm <base> id
   default`). Otherwise it is created with them. Change the numbers in
   `--userns=keep-id:uid=…,gid=…` too if you change them here.
 
@@ -278,9 +359,9 @@ checkout:
 
 What the two repos share, and must keep in step:
 
-- `KIDE_USER`/`KIDE_UID`/`KIDE_GID`: the same values in both `base.conf`
-  files (kide reuses the user ibn-dev created; its fish becomes the login
-  shell)
+- `IBNDEV_USER`/`IBNDEV_UID`/`IBNDEV_GID`: the same values in both
+  `base.conf` files (kide reuses the user ibn-dev created; its fish becomes
+  the login shell)
 - `container-shell/{sync.sh,load.sh,load.fish}`: the same files in both
   repos. Otherwise kide knows nothing of ibn-dev: ibn-dev's hooks
   `10-ibn-dev.{sh,fish}` set its environment in kide's fish and bash, next to
@@ -319,7 +400,9 @@ extension with podman): a thin layer adding `~/.vscode-server`, and a
 
 1. Edit `manifest/dist.tsv` (version, file, url, sha256).
 2. `scripts/dist-update.sh` — the only step that downloads (curl,
-   sha256sum); refreshes `dist/` and `VERSIONS`.
+   sha256sum); refreshes `dist/` and `VERSIONS`. A tarball over 95 MiB
+   (GitHub's limit is 100 MiB per file) lands in `dist/` as
+   `FILE.part00`, `FILE.part01`, …; `build-dist.sh` joins them.
 3. `test/run.sh` and `test/prodsim/run.sh` (after rebuilding the image) must
    pass before committing.
 4. Update the table below for a new component, review `git status`, commit.
@@ -333,16 +416,20 @@ publishes, where it publishes something. To repeat a check by hand, run from
 the repo root (the upstream ones need network):
 
     # pins (offline, what build-dist.sh does first)
-    awk -F'\t' '!/^#/ && NF { print $6 "  " $4 }' manifest/dist.tsv | (cd dist && sha256sum -c -)
+    awk -F'\t' '!/^#/ && NF { print $6, $4 }' manifest/dist.tsv | while read -r sha f; do
+      if [ -f "dist/$f" ]; then cat "dist/$f"; else cat "dist/$f".part*; fi |
+        sha256sum | grep -q "^$sha " && echo "$f: OK" || echo "$f: FAILED"
+    done
 
     # cmake: upstream's SHA-256 list (signed: cmake-4.4.4-SHA-256.txt.asc)
     curl -fsSL https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-SHA-256.txt |
       grep ' cmake-4.4.4-linux-x86_64.tar.gz$' | (cd dist && sha256sum -c -)
 
     # onnxruntime: no checksum file; GitHub's asset digest of the release
+    # (split in dist/: join the parts)
     curl -fsSL https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.30.0 |
-      grep -A30 '"name": "onnxruntime-linux-x64-1.30.0.tgz"' | grep -m1 '"digest"'
-    sha256sum dist/onnxruntime-linux-x64-1.30.0.tgz
+      grep -A30 '"name": "onnxruntime-linux-x64-gpu_cuda13-1.30.0.tgz"' | grep -m1 '"digest"'
+    cat dist/onnxruntime-linux-x64-gpu_cuda13-1.30.0.tgz.part* | sha256sum
 
     # ACE+TAO: upstream's md5 (the file names the packager's path, compare the hash)
     curl -fsSL 'https://github.com/DOCGroup/ACE_TAO/releases/download/ACE%2BTAO-8_0_8/ACE%2BTAO-src-8.0.8.tar.bz2.md5'
@@ -398,7 +485,52 @@ Everything in `dist/`, with the pinned upstream version and its license.
 | dist/cmake | <https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-x86_64.tar.gz> | `4.4.4 (prebuilt)` | BSD-3-Clause (`Copyright.txt`; the binary tarball bundles its third-party notices in `doc/cmake`) |
 | dist/geos | <https://github.com/libgeos/geos/releases/download/3.13.1/geos-3.13.1.tar.bz2> | `3.13.1 (source)` | LGPL-2.1-or-later (`COPYING`; shared libraries, linked dynamically) |
 | dist/gdal | <https://github.com/OSGeo/gdal/releases/download/v3.10.3/gdal-3.10.3.tar.gz> | `3.10.3 (source)` | MIT (`LICENSE.TXT`, which lists the few differently licensed parts, none of them built here) |
-| dist/onnxruntime | <https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-linux-x64-1.30.0.tgz> | `1.30.0 (prebuilt)` | MIT (`LICENSE`, `ThirdPartyNotices.txt` next to it) |
+| dist/onnxruntime | <https://github.com/microsoft/onnxruntime/releases/download/v1.30.0/onnxruntime-linux-x64-gpu_cuda13-1.30.0.tgz> | `1.30.0 (prebuilt)` | MIT (`LICENSE`, `ThirdPartyNotices.txt` next to it) |
 | dist/opendds | <https://github.com/OpenDDS/OpenDDS/releases/download/v3.34.0/OpenDDS-3.34.0.tar.gz> | `3.34.0 (source)` | LicenseRef-OpenDDS (`LICENSE`: permissive OCI license, no SPDX id) |
 | dist/proj | <https://github.com/OSGeo/PROJ/releases/download/9.6.0/proj-9.6.0.tar.gz> | `9.6.0 (source)` | MIT (`COPYING`) |
 | dist/rapidjson | <https://github.com/Tencent/rapidjson/archive/fd3dc29a5c2852df569e1ea81dbde2c412ac5051.tar.gz> | `fd3dc29a5c28` | MIT (`license.txt`; `bin/jsonchecker` is under the JSON license, not used) |
+
+## System check
+
+Run on the prod host, paste the output back.
+
+```bash
+# NVIDIA driver, GPU
+nvidia-smi --query-gpu=name,driver_version --format=csv
+# CUDA, cuDNN (rpm, runfile/tarball, pip or conda)
+rpm -qa | grep -E '^cuda-(cudart|toolkit)|^libcudnn|onnx' | sort
+readlink -f /usr/local/cuda
+ls -d /usr/local/cuda* /opt/cuda* 2>/dev/null
+command -v nvcc && nvcc --version | tail -1
+ldconfig -p | grep -E 'libcudart|libcublas\.|libcudnn\.'
+find / /home /opt /usr/local /usr -xdev \( -name 'libcudart.so.*' -o -name 'libcudnn.so.*' \) 2>/dev/null | sort -u
+# CDI spec, GPU in the container
+ls -l /etc/cdi/nvidia.yaml
+podman run --rm --device nvidia.com/gpu=all ibn-dev nvidia-smi -L
+# onnxruntime (system, tarball or pip/conda)
+ldconfig -p | grep onnxruntime
+find / /home /opt /usr/local /usr -xdev \( -name 'onnxruntimeConfig.cmake' -o -name 'onnxruntime_cxx_api.h' -o -name 'libonnxruntime.pc' \
+  -o -name 'libonnxruntime.so*' -o -name 'libonnxruntime_providers_cuda.so' \) 2>/dev/null | sort -u
+pip list 2>/dev/null | grep -iE 'onnx|nvidia'
+# onnxruntime's CUDA build in the dist (after build-dist.sh): version + the CUDA provider
+grep ^Version ~/workspace/ibn-dist/lib64/pkgconfig/libonnxruntime.pc
+ls -l ~/workspace/ibn-dist/lib64/libonnxruntime_providers_cuda.so
+# CUDA + cuDNN in the ibn-dev container (from the repo root; needs the image
+# and the dist with onnxruntime's CUDA build: build-dist.sh); prints CUDA OK + cuDNN OK
+podman run --rm --http-proxy=false --userns=keep-id:uid=1001,gid=1001 \
+  --device nvidia.com/gpu=all \
+  -v /usr/local/cuda-13/lib64:/opt/host-cuda/lib64:ro \
+  -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so:ro \
+  -v /usr/lib64/libcudnn.so.9:/opt/host-cudnn/libcudnn.so.9:ro \
+  -v /usr/lib64/libcudnn_adv.so.9:/opt/host-cudnn/libcudnn_adv.so.9:ro \
+  -v /usr/lib64/libcudnn_cnn.so.9:/opt/host-cudnn/libcudnn_cnn.so.9:ro \
+  -v /usr/lib64/libcudnn_engines_precompiled.so.9:/opt/host-cudnn/libcudnn_engines_precompiled.so.9:ro \
+  -v /usr/lib64/libcudnn_engines_runtime_compiled.so.9:/opt/host-cudnn/libcudnn_engines_runtime_compiled.so.9:ro \
+  -v /usr/lib64/libcudnn_graph.so.9:/opt/host-cudnn/libcudnn_graph.so.9:ro \
+  -v /usr/lib64/libcudnn_heuristic.so.9:/opt/host-cudnn/libcudnn_heuristic.so.9:ro \
+  -v /usr/lib64/libcudnn_ops.so.9:/opt/host-cudnn/libcudnn_ops.so.9:ro \
+  -e LD_LIBRARY_PATH=/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64:/workspace/opt/lib64:/workspace/opt/lib:/opt/host-cuda/lib64:/opt/host-cudnn \
+  -v "$PWD/test/cuda:/check:ro,Z" -v "$HOME/workspace:/workspace:Z" ibn-dev \
+  bash -c '. /workspace/ibn-dist/bin/ibn-dist-env.sh &&
+    g++ -std=c++17 /check/ort_cuda_check.cpp -lonnxruntime -ldl -o /tmp/ort_cuda_check && /tmp/ort_cuda_check'
+```

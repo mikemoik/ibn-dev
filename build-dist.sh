@@ -3,7 +3,7 @@
 # (manifest/dist.tsv) into PREFIX (default $IBN_DIST_PREFIX, else
 # ~/.local/ibn-dist), no network:
 #   PREFIX/bin/{cmake,ctest,cpack}    CMake 4 (upstream's prebuilt)
-#   PREFIX/{include,lib64}            onnxruntime (upstream's prebuilt)
+#   PREFIX/{include,lib64}            onnxruntime (upstream's prebuilt, CUDA 13 build)
 #   PREFIX/{bin,include,lib,share}    ACE+TAO 8 + OpenDDS 3.34 built from source
 #   PREFIX/share/tao/TAO_IDL/{include,be_include}  TAO_IDL headers (from source)
 #   PREFIX/{bin,include,lib64,share/proj}  PROJ 9.6 + GEOS 3.13 built from source
@@ -40,10 +40,20 @@ mkdir -p "$PREFIX" "$BUILD"
 # upstream release tarballs (manifest/dist.tsv), sha256-checked first. cmake
 # and onnxruntime are upstream's own Linux x86_64 builds, unpacked as shipped;
 # ACE+TAO, OpenDDS, RapidJSON, PROJ, GEOS and GDAL are source and compiled here.
+# A tarball split by scripts/dist-update.sh (dist/FILE.part00, …: over GitHub's
+# 100 MiB file limit) is joined into $BUILD/dist first; its pin is the whole
+# file's.
 log "dist: checking tarballs"
-awk -F'\t' '!/^#/ && NF { print $6 "  " $4 }' "$ROOT/manifest/dist.tsv" |
-  (cd "$ROOT/dist" && sha256sum -c --quiet -)
-dist() { echo "$ROOT/dist/$(awk -F'\t' -v n="$1" '$1 == n { print $4 }' "$ROOT/manifest/dist.tsv")"; }
+mkdir -p "$BUILD/dist"
+awk -F'\t' '!/^#/ && NF { print $6, $4 }' "$ROOT/manifest/dist.tsv" | while read -r sha file; do
+  f=$ROOT/dist/$file
+  [ -f "$f" ] || { f=$BUILD/dist/$file; cat "$ROOT/dist/$file".part[0-9][0-9] >"$f"; }
+  echo "$sha  $f"
+done | sha256sum -c --quiet -
+dist() {
+  local file; file=$(awk -F'\t' -v n="$1" '$1 == n { print $4 }' "$ROOT/manifest/dist.tsv")
+  if [ -f "$ROOT/dist/$file" ]; then echo "$ROOT/dist/$file"; else echo "$BUILD/dist/$file"; fi
+}
 
 log "cmake (prebuilt)"
 # without the docs and the Qt GUI (cmake-gui and its desktop files)

@@ -3,16 +3,33 @@
 //   podman build --build-arg-file podman/base.conf -t ibn-dev -f podman/Containerfile.ibn-dev .
 //   podman build --build-arg-file podman/base.conf -t ibn-devcontainer -f devcontainer/Containerfile .
 // VS Code needs "dev.containers.dockerPath": "podman". uid/gid 1001 and the
-// user "default" are KIDE_UID/KIDE_GID/KIDE_USER from podman/base.conf.
+// user "default" are IBNDEV_UID/IBNDEV_GID/IBNDEV_USER from podman/base.conf.
+// GPU: the host's GPU (CDI), CUDA 13 and cuDNN 9 go in read-only for
+// onnxruntime's CUDA provider; the container does not start on a host without
+// them (devcontainer/README.md). LD_LIBRARY_PATH = the image's value
+// (podman/Containerfile.ibn-dev) + the two host dirs: keep it in step.
 {
   "name": "ibn-devcontainer",
   "image": "localhost/ibn-devcontainer",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,Z",
   "workspaceFolder": "/workspace",
   "mounts": [
-    "source=ibn-devcontainer-vscode,target=/home/default/.vscode-server,type=volume"
+    "source=ibn-devcontainer-vscode,target=/home/default/.vscode-server,type=volume",
+    "source=/usr/local/cuda-13/lib64,target=/opt/host-cuda/lib64,type=bind,readonly",
+    "source=/usr/lib64/libcudnn.so.9,target=/opt/host-cudnn/libcudnn.so,type=bind,readonly",
+    "source=/usr/lib64/libcudnn.so.9,target=/opt/host-cudnn/libcudnn.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_adv.so.9,target=/opt/host-cudnn/libcudnn_adv.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_cnn.so.9,target=/opt/host-cudnn/libcudnn_cnn.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_engines_precompiled.so.9,target=/opt/host-cudnn/libcudnn_engines_precompiled.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_engines_runtime_compiled.so.9,target=/opt/host-cudnn/libcudnn_engines_runtime_compiled.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_graph.so.9,target=/opt/host-cudnn/libcudnn_graph.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_heuristic.so.9,target=/opt/host-cudnn/libcudnn_heuristic.so.9,type=bind,readonly",
+    "source=/usr/lib64/libcudnn_ops.so.9,target=/opt/host-cudnn/libcudnn_ops.so.9,type=bind,readonly"
   ],
-  "runArgs": ["--userns=keep-id:uid=1001,gid=1001", "--http-proxy=false"],
+  "runArgs": ["--userns=keep-id:uid=1001,gid=1001", "--http-proxy=false", "--device", "nvidia.com/gpu=all"],
+  "containerEnv": {
+    "LD_LIBRARY_PATH": "/workspace/ibn-dist/lib:/workspace/ibn-dist/lib64:/workspace/opt/lib64:/workspace/opt/lib:/opt/host-cuda/lib64:/opt/host-cudnn"
+  },
   "containerUser": "default",
   "remoteUser": "default",
   "updateRemoteUserUID": false,
